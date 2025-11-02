@@ -34,6 +34,54 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 	var allRepos []*RepositoryGraphQLData
 	var after *string
 
+	// 文字列ベースのクエリを使用（オプショナル変数を適切に処理するため）
+	queryStr := `
+		query ReposQuery($login: String!, $isFork: Boolean, $first: Int, $after: String) {
+			user(login: $login) {
+				repositories(isFork: $isFork, first: $first, after: $after, ownerAffiliations: OWNER) {
+					nodes {
+						name
+						owner {
+							login
+						}
+						primaryLanguage {
+							name
+						}
+						languages(first: 100) {
+							edges {
+								node {
+									name
+								}
+								size
+							}
+							totalSize
+						}
+						stargazerCount
+						defaultBranchRef {
+							target {
+								... on Commit {
+									history(first: 100) {
+										totalCount
+										nodes {
+											committedDate
+											author {
+												date
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					pageInfo {
+						endCursor
+						hasNextPage
+					}
+				}
+			}
+		}
+	`
+
 	for {
 		// 変数をmapに変換
 		variables := map[string]interface{}{
@@ -45,8 +93,9 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			variables["after"] = *after
 		}
 
+		// Execメソッドで文字列クエリと生成された型を組み合わせて使用
 		var query ghgraphql.ReposQuery
-		err = graphqlClient.Query(ctx, &query, variables)
+		err = graphqlClient.Exec(ctx, queryStr, &query, variables)
 		if err != nil {
 			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
 		}
@@ -69,20 +118,36 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			// Languages
 			if repo.Languages != nil {
 				repoData.Languages.TotalSize = repo.Languages.TotalSize
-				for _, langNode := range repo.Languages.Nodes {
-					repoData.Languages.Nodes = append(repoData.Languages.Nodes, struct {
-						Name string `json:"name"`
-						Size int    `json:"size"`
-					}{
-						Name: langNode.Name,
-						Size: langNode.Size,
-					})
+				// LanguageConnectionのnodesはLanguage型（sizeフィールドなし）
+				// edgesにsizeがあるので、edgesを使用するか、nodesだけを保存する
+				// ここではedgesを使用してsizeも取得
+				if len(repo.Languages.Edges) > 0 {
+					for _, edge := range repo.Languages.Edges {
+						repoData.Languages.Nodes = append(repoData.Languages.Nodes, struct {
+							Name string `json:"name"`
+							Size int    `json:"size"`
+						}{
+							Name: edge.Node.Name,
+							Size: edge.Size,
+						})
+					}
+				} else {
+					// edgesが空の場合はnodesを使用
+					for _, lang := range repo.Languages.Nodes {
+						repoData.Languages.Nodes = append(repoData.Languages.Nodes, struct {
+							Name string `json:"name"`
+							Size int    `json:"size"`
+						}{
+							Name: lang.Name,
+							Size: 0, // size情報がない場合は0
+						})
+					}
 				}
 			}
 
 			// DefaultBranchRef
-			if repo.DefaultBranchRef != nil && repo.DefaultBranchRef.Target != nil && repo.DefaultBranchRef.Target.History != nil {
-				history := repo.DefaultBranchRef.Target.History
+			if repo.DefaultBranchRef != nil {
+				history := repo.DefaultBranchRef.Target.Commit.History
 				repoData.DefaultBranchRef.Target.History.TotalCount = history.TotalCount
 				for _, commit := range history.Nodes {
 					if commit != nil {
@@ -157,8 +222,8 @@ func FetchUserDetailsWithGraphQLGenerated(ctx context.Context, token string, use
 				StargazerCount: repo.StargazerCount,
 			}
 
-			if repo.DefaultBranchRef != nil && repo.DefaultBranchRef.Target != nil && repo.DefaultBranchRef.Target.History != nil {
-				node.DefaultBranchRef.Target.History.TotalCount = repo.DefaultBranchRef.Target.History.TotalCount
+			if repo.DefaultBranchRef != nil {
+				node.DefaultBranchRef.Target.History.TotalCount = repo.DefaultBranchRef.Target.Commit.History.TotalCount
 			}
 
 			userDetails.Repositories.Nodes = append(userDetails.Repositories.Nodes, node)

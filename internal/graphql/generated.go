@@ -58,8 +58,10 @@ type Repository struct {
 	CreatedAt        time.Time       `graphql:"createdAt"`
 	UpdatedAt        time.Time       `graphql:"updatedAt"`
 	DefaultBranchRef *struct {
-		Target *struct {
-			History *CommitHistory `graphql:"... on Commit"`
+		Target struct {
+			Commit struct {
+				History CommitHistory `graphql:"history(first: 100)"`
+			} `graphql:"... on Commit"`
 		} `graphql:"target"`
 	} `graphql:"defaultBranchRef"`
 	Languages *LanguageConnection `graphql:"languages(first: 100)"`
@@ -67,11 +69,15 @@ type Repository struct {
 
 // LanguageConnection 言語のコネクション
 type LanguageConnection struct {
-	Nodes     []LanguageNode `graphql:"nodes"`
-	TotalSize int            `graphql:"totalSize"`
+	Nodes []Language `graphql:"nodes"`
+	Edges []struct {
+		Node Language `graphql:"node"`
+		Size int      `graphql:"size"`
+	} `graphql:"edges"`
+	TotalSize int `graphql:"totalSize"`
 }
 
-// LanguageNode 言語ノード
+// LanguageNode 言語ノード（後方互換性のため残すが、実際にはLanguageを使用）
 type LanguageNode struct {
 	Name string `graphql:"name"`
 	Size int    `graphql:"size"`
@@ -174,6 +180,7 @@ type ReposQueryVariables struct {
 }
 
 // ReposQuery リポジトリ情報を取得するクエリ
+// 変数は構造体のgraphqlタグに直接埋め込む
 type ReposQuery struct {
 	User struct {
 		Repositories struct {
@@ -181,6 +188,16 @@ type ReposQuery struct {
 			PageInfo PageInfo     `graphql:"pageInfo"`
 		} `graphql:"repositories(isFork: $isFork, first: $first, after: $after, ownerAffiliations: OWNER)"`
 	} `graphql:"user(login: $login)"`
+}
+
+// ReposQueryVars リポジトリクエリの変数定義
+// hasura/go-graphql-clientでは、変数はクエリ構造体とは別に定義する必要がある場合がある
+// ただし、実際にはmap[string]interface{}で直接渡すため、この構造体は参考用
+type ReposQueryVars struct {
+	Login  string  `json:"login"`
+	IsFork *bool   `json:"isFork,omitempty"`
+	First  *int    `json:"first,omitempty"`
+	After  *string `json:"after,omitempty"`
 }
 
 // CommitLanguagesQueryVariables コミット言語クエリの変数

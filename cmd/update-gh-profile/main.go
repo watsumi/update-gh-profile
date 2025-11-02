@@ -14,6 +14,26 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// formatBytes バイト数を人間が読みやすい形式に変換する
+func formatBytes(bytes int) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 func main() {
 	// コマンドライン引数のパース
 	var (
@@ -110,6 +130,76 @@ func main() {
 	}
 	if len(repos) > maxDisplay {
 		fmt.Printf("  ... 他 %d 件\n", len(repos)-maxDisplay)
+	}
+
+	// 言語情報の取得テスト（最初の3件のリポジトリに対して）
+	if len(repos) > 0 {
+		fmt.Println("\n📊 リポジトリの言語情報を取得しています...")
+		testCount := 3
+		if len(repos) < testCount {
+			testCount = len(repos)
+		}
+
+		for i := 0; i < testCount; i++ {
+			repo := repos[i]
+			owner := repo.GetOwner().GetLogin()
+			repoName := repo.GetName()
+
+			fmt.Printf("\n  [%d/%d] %s/%s の言語情報を取得中...\n", i+1, testCount, owner, repoName)
+
+			languages, err := repository.FetchRepositoryLanguages(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  エラー: %v\n", err)
+				continue
+			}
+
+			if len(languages) == 0 {
+				fmt.Printf("    ℹ️  言語情報が見つかりませんでした\n")
+				continue
+			}
+
+			fmt.Printf("    ✅ 言語数: %d\n", len(languages))
+
+			// 言語情報を表示（上位5言語まで）
+			type langStat struct {
+				name  string
+				bytes int
+			}
+			var langList []langStat
+			totalBytes := 0
+			for lang, bytes := range languages {
+				langList = append(langList, langStat{name: lang, bytes: bytes})
+				totalBytes += bytes
+			}
+
+			// バイト数でソート（降順）
+			for i := 0; i < len(langList)-1; i++ {
+				for j := i + 1; j < len(langList); j++ {
+					if langList[i].bytes < langList[j].bytes {
+						langList[i], langList[j] = langList[j], langList[i]
+					}
+				}
+			}
+
+			maxLangDisplay := 5
+			if len(langList) < maxLangDisplay {
+				maxLangDisplay = len(langList)
+			}
+
+			fmt.Printf("    📈 主要な言語（上位%d言語）:\n", maxLangDisplay)
+			for j := 0; j < maxLangDisplay; j++ {
+				lang := langList[j]
+				percentage := float64(lang.bytes) / float64(totalBytes) * 100
+				fmt.Printf("      - %s: %.1f%% (%s)\n",
+					lang.name,
+					percentage,
+					formatBytes(lang.bytes))
+			}
+			if len(langList) > maxLangDisplay {
+				fmt.Printf("      ... 他 %d 言語\n", len(langList)-maxLangDisplay)
+			}
+		}
+		fmt.Println("\n✅ 言語情報の取得テストが完了しました")
 	}
 
 	// GitHub Actions の出力変数を設定（GITHUB_OUTPUT ファイルに書き込む）

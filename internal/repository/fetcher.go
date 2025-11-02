@@ -145,6 +145,41 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 	return allRepos, nil
 }
 
+// FetchRepositoryLanguages 指定されたリポジトリの言語統計を取得する
+//
+// Preconditions:
+// - owner と repo が有効なリポジトリ識別子であること
+// - client が有効な GitHub クライアントであること
+//
+// Postconditions:
+// - 返される map は map[string]int{言語名: バイト数} の形式である
+// - エラー時は nil と error を返す
+//
+// Invariants:
+// - API エラー時は適切なエラーを返す
+// - レート制限に達した場合は待機して再試行する
+func FetchRepositoryLanguages(ctx context.Context, client *github.Client, owner, repo string) (map[string]int, error) {
+	if owner == "" || repo == "" {
+		return nil, fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+	}
+
+	// GitHub API の /repos/{owner}/{repo}/languages エンドポイントを呼び出す
+	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-languages
+	languages, resp, err := client.Repositories.ListLanguages(ctx, owner, repo)
+
+	if err != nil {
+		return nil, fmt.Errorf("リポジトリ %s/%s の言語情報取得に失敗しました: %w", owner, repo, err)
+	}
+
+	// レート制限のチェックと処理
+	if err := handleRateLimit(ctx, resp); err != nil {
+		return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+	}
+
+	// languages は map[string]int{言語名: バイト数} の形式
+	return languages, nil
+}
+
 // handleRateLimit API レート制限を検出し、適切に待機する
 //
 // Preconditions:

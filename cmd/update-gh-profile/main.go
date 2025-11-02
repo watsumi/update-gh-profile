@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/watsumi/update-gh-profile/internal/aggregator"
 	"github.com/watsumi/update-gh-profile/internal/config"
 	"github.com/watsumi/update-gh-profile/internal/repository"
 
@@ -200,6 +201,83 @@ func main() {
 			}
 		}
 		fmt.Println("\n✅ 言語情報の取得テストが完了しました")
+	}
+
+	// 言語データ集計のテスト（全リポジトリの言語情報を集計）
+	if len(repos) > 0 {
+		fmt.Println("\n📊 全リポジトリの言語データを集計しています...")
+
+		// リポジトリごとの言語データを格納する map
+		// map[リポジトリ名]map[言語名]バイト数
+		languageData := make(map[string]map[string]int)
+
+		// 各リポジトリの言語情報を取得（最初の5件のリポジトリに対して）
+		testCount := 5
+		if len(repos) < testCount {
+			testCount = len(repos)
+		}
+
+		for i := 0; i < testCount; i++ {
+			repo := repos[i]
+			owner := repo.GetOwner().GetLogin()
+			repoName := repo.GetName()
+			repoKey := fmt.Sprintf("%s/%s", owner, repoName)
+
+			fmt.Printf("  [%d/%d] %s の言語情報を取得中...\n", i+1, testCount, repoKey)
+
+			languages, err := repository.FetchRepositoryLanguages(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  エラー: %v\n", err)
+				continue
+			}
+
+			if len(languages) == 0 {
+				fmt.Printf("    ℹ️  言語情報が見つかりませんでした\n")
+				continue
+			}
+
+			// 言語データを保存
+			languageData[repoKey] = languages
+			fmt.Printf("    ✅ %d 言語を取得しました\n", len(languages))
+		}
+
+		// 言語データを集計
+		fmt.Printf("\n📈 言語データを集計中...\n")
+		languageTotals := aggregator.AggregateLanguages(repos[:testCount], languageData)
+
+		if len(languageTotals) > 0 {
+			fmt.Printf("✅ 集計完了: %d 言語\n", len(languageTotals))
+
+			// ランキングを生成
+			rankedLanguages := aggregator.RankLanguages(languageTotals)
+
+			// 上位5言語を表示
+			maxDisplay := 5
+			if len(rankedLanguages) < maxDisplay {
+				maxDisplay = len(rankedLanguages)
+			}
+
+			fmt.Printf("\n🏆 言語ランキング（上位%d言語）:\n", maxDisplay)
+			for i := 0; i < maxDisplay; i++ {
+				lang := rankedLanguages[i]
+				fmt.Printf("  %d. %s: %.1f%% (%s)\n",
+					i+1,
+					lang.Language,
+					lang.Percentage,
+					formatBytes(lang.Bytes))
+			}
+
+			// 閾値（1%）でフィルタリングして表示
+			filtered := aggregator.FilterMinorLanguages(rankedLanguages, 1.0)
+			fmt.Printf("\n📌 閾値1%%以上: %d 言語\n", len(filtered))
+			if len(filtered) < len(rankedLanguages) {
+				fmt.Printf("  （%d 言語が除外されました）\n", len(rankedLanguages)-len(filtered))
+			}
+		} else {
+			fmt.Println("⚠️  集計できる言語データがありませんでした")
+		}
+
+		fmt.Println("\n✅ 言語データ集計のテストが完了しました")
 	}
 
 	// コミット情報の取得テスト（最初の1件のリポジトリに対して）

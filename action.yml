@@ -1,8 +1,11 @@
 name: 'Update GitHub Profile'
 description: '認証ユーザー自身の GitHub リポジトリメトリクスを取得して、README.md を更新する'
 inputs:
-  github_token:
-    description: 'GitHub Personal Access Token（認証ユーザーのトークン）'
+  github_token_read:
+    description: 'GitHub Personal Access Token（リポジトリ情報読み取り用、すべてのリポジトリを読み取る権限が必要）'
+    required: false
+  github_token_write:
+    description: 'GitHub Personal Access Token（README更新用、リポジトリへの書き込み権限が必要）'
     required: false
   username:
     description: '[非推奨] このパラメータは無視されます。認証ユーザー自身のリポジトリのみを取得します'
@@ -12,9 +15,6 @@ inputs:
     description: 'フォークリポジトリを除外するかどうか（true/false）'
     required: false
     default: 'true'
-outputs:
-  repository_count:
-    description: '取得したリポジトリ数'
 runs:
   using: 'composite'
   steps:
@@ -31,18 +31,20 @@ runs:
 
     - name: Fetch user repositories
       env:
-        GITHUB_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN }}
+        GITHUB_TOKEN_READ: ${{ inputs.github_token_read }}
+        GITHUB_TOKEN_WRITE: ${{ inputs.github_token_write }}
       shell: bash
       working-directory: ${{ github.action_path }}
       run: |
         echo "::group::リポジトリ一覧を取得"
-        export GITHUB_TOKEN="${{ inputs.github_token || env.GITHUB_TOKEN }}"
-        
+        export GITHUB_TOKEN_READ="${{ inputs.github_token_read }}"
+        export GITHUB_TOKEN_WRITE="${{ inputs.github_token_write }}"
+
         EXCLUDE_FORKS="${{ inputs.exclude_forks }}"
         if [ -z "$EXCLUDE_FORKS" ]; then
           EXCLUDE_FORKS="true"
         fi
-        
+
         # リポジトリ一覧を取得（認証ユーザー自身のリポジトリのみ）
         # username パラメータは指定しません（認証ユーザーが自動的に使用されます）
         go run ./cmd/update-gh-profile/main.go --exclude-forks="$EXCLUDE_FORKS" || exit 1

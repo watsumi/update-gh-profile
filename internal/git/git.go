@@ -149,21 +149,109 @@ func Commit(repoPath, message string, files []string) error {
 	return nil
 }
 
+// SetRemoteURLWithToken リモートURLにトークンを設定する
+//
+// Preconditions:
+// - repoPath が有効な Git リポジトリのパスであること
+// - remote がリモート名であること（省略可能、デフォルトは "origin"）
+// - token がGitHub Personal Access Tokenであること
+//
+// Postconditions:
+// - リモートURLがトークンを含む形式に更新される
+//
+// Invariants:
+// - リモートリポジトリが設定されていることが前提
+func SetRemoteURLWithToken(repoPath, remote, token string) error {
+	if remote == "" {
+		remote = "origin"
+	}
+
+	if token == "" {
+		return fmt.Errorf("トークンが設定されていません")
+	}
+
+	// 現在のリモートURLを取得
+	cmd := exec.Command("git", "remote", "get-url", remote)
+	cmd.Dir = repoPath
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("リモートURLの取得に失敗しました: %w\nstderr: %s", err, stderr.String())
+	}
+
+	currentURL := strings.TrimSpace(stdout.String())
+
+	// HTTPS形式のURLを構築
+	// https://github.com/owner/repo.git を https://TOKEN@github.com/owner/repo.git に変換
+	var newURL string
+	if strings.HasPrefix(currentURL, "https://") {
+		// 既に https:// で始まる場合
+		if strings.Contains(currentURL, "@") {
+			// 既にトークンが含まれている場合は、置き換える
+			// https://oldtoken@github.com/owner/repo.git -> https://newtoken@github.com/owner/repo.git
+			parts := strings.SplitN(currentURL, "@", 2)
+			if len(parts) == 2 {
+				// parts[1] は github.com/owner/repo.git の部分
+				newURL = fmt.Sprintf("https://%s@%s", token, parts[1])
+			} else {
+				return fmt.Errorf("リモートURLの解析に失敗しました: %s", currentURL)
+			}
+		} else {
+			// トークンが含まれていない場合は追加
+			// https://github.com/owner/repo.git -> https://TOKEN@github.com/owner/repo.git
+			newURL = strings.Replace(currentURL, "https://", fmt.Sprintf("https://%s@", token), 1)
+		}
+	} else if strings.HasPrefix(currentURL, "git@") {
+		// SSH形式の場合はHTTPS形式に変換してトークンを追加
+		// git@github.com:owner/repo.git -> https://TOKEN@github.com/owner/repo.git
+		newURL = strings.Replace(currentURL, "git@github.com:", fmt.Sprintf("https://%s@github.com/", token), 1)
+	} else {
+		return fmt.Errorf("サポートされていないリモートURL形式です: %s", currentURL)
+	}
+
+	// リモートURLを設定
+	cmd = exec.Command("git", "remote", "set-url", remote, newURL)
+	cmd.Dir = repoPath
+
+	stderr.Reset()
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("リモートURLの設定に失敗しました: %w\nstderr: %s", err, stderr.String())
+	}
+
+	return nil
+}
+
 // Push リモートリポジトリにプッシュする
 //
 // Preconditions:
 // - repoPath が有効な Git リポジトリのパスであること
 // - remote がリモート名であること（省略可能、デフォルトは "origin"）
 // - branch がブランチ名であること（省略可能、デフォルトは現在のブランチ）
+// - token がGitHub Personal Access Tokenであること（省略可能、設定されていない場合はURLにトークンを含めない）
 //
 // Postconditions:
 // - 変更がリモートリポジトリにプッシュされる
 //
 // Invariants:
 // - リモートリポジトリが設定されていることが前提
-func Push(repoPath, remote, branch string) error {
+func Push(repoPath, remote, branch, token string) error {
 	if remote == "" {
 		remote = "origin"
+	}
+
+	// トークンが設定されている場合はリモートURLに設定
+	if token != "" {
+		err := SetRemoteURLWithToken(repoPath, remote, token)
+		if err != nil {
+			return fmt.Errorf("リモートURLへのトークン設定に失敗しました: %w", err)
+		}
 	}
 
 	// ブランチが指定されていない場合は現在のブランチを取得
@@ -206,13 +294,14 @@ func Push(repoPath, remote, branch string) error {
 // - files がコミットするファイルのリストであること（空の場合はすべての変更をコミット）
 // - remote がリモート名であること（省略可能）
 // - branch がブランチ名であること（省略可能）
+// - token がGitHub Personal Access Tokenであること（省略可能）
 //
 // Postconditions:
 // - 変更がコミットされ、リモートリポジトリにプッシュされる
 //
 // Invariants:
 // - コミットとプッシュが順次実行される
-func CommitAndPush(repoPath, message string, files []string, remote, branch string) error {
+func CommitAndPush(repoPath, message string, files []string, remote, branch, token string) error {
 	// 変更があるか確認
 	hasChanges, err := HasChanges(repoPath)
 	if err != nil {
@@ -230,7 +319,7 @@ func CommitAndPush(repoPath, message string, files []string, remote, branch stri
 	}
 
 	// プッシュ
-	err = Push(repoPath, remote, branch)
+	err = Push(repoPath, remote, branch, token)
 	if err != nil {
 		return fmt.Errorf("プッシュに失敗しました: %w", err)
 	}

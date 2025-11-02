@@ -23,7 +23,6 @@ type Config struct {
 	SVGOutputDir    string          // SVG ファイルの出力ディレクトリ
 	Timezone        string          // タイムゾーン（例: "Asia/Tokyo", "UTC"）
 	CommitMessage   string          // Git コミットメッセージ
-	EnableGitPush   bool            // Git プッシュを有効にするか
 	MaxRepositories int             // 処理する最大リポジトリ数（0 = すべて）
 	ExcludeForks    bool            // フォークリポジトリを除外するか
 	LogLevel        logger.LogLevel // ログレベル
@@ -43,7 +42,7 @@ type Config struct {
 //
 // Invariants:
 // - エラーが発生した場合は適切に処理される
-func Run(ctx context.Context, token string, config Config) error {
+func Run(ctx context.Context, tokenRead string, tokenWrite string, config Config) error {
 	// ロガーの設定
 	if config.LogLevel != 0 {
 		logger.DefaultLogger.SetLevel(config.LogLevel)
@@ -52,13 +51,13 @@ func Run(ctx context.Context, token string, config Config) error {
 	logger.Info("ワークフローを開始します")
 
 	// トークンの検証（既に渡されているが念のため確認）
-	if token == "" {
-		logger.Error("GITHUB_TOKEN が設定されていません")
-		return fmt.Errorf("GITHUB_TOKEN が設定されていません")
+	if tokenRead == "" {
+		logger.Error("GITHUB_TOKEN_READ が設定されていません")
+		return fmt.Errorf("GITHUB_TOKEN_READ が設定されていません")
 	}
 
 	// 認証ユーザー情報をGraphQLで取得（生成された型を使用）
-	username, userID, err := repository.FetchViewerGenerated(ctx, token)
+	username, userID, err := repository.FetchViewerGenerated(ctx, tokenRead)
 	if err != nil {
 		logger.LogError(err, "認証ユーザー情報の取得に失敗しました")
 		return fmt.Errorf("認証ユーザー情報の取得に失敗しました: %w", err)
@@ -70,7 +69,7 @@ func Run(ctx context.Context, token string, config Config) error {
 	logger.Info("GraphQLを使用してデータを取得します")
 
 	languageTotals, commitHistories, timeDistributions, allCommitLanguages, totalCommits, totalPRs, repos, err := AggregateGraphQLData(
-		ctx, token, username, userID, config.ExcludeForks)
+		ctx, tokenRead, username, userID, config.ExcludeForks)
 	if err != nil {
 		logger.LogError(err, "GraphQLデータの取得・集計に失敗しました")
 		return fmt.Errorf("GraphQLデータの取得・集計に失敗しました: %w", err)
@@ -272,11 +271,6 @@ func Run(ctx context.Context, token string, config Config) error {
 	}
 
 	// 6. Git コミット・プッシュ
-	if !config.EnableGitPush {
-		fmt.Println("\n✅ 処理が完了しました（Git プッシュはスキップされました）")
-		return nil
-	}
-
 	fmt.Println("\n🔀 Git 操作を実行しています...")
 
 	repoPath := config.RepoPath
@@ -312,7 +306,7 @@ func Run(ctx context.Context, token string, config Config) error {
 
 	// コミット・プッシュ
 	logger.Info("Git コミット・プッシュを実行しています...")
-	err = git.CommitAndPush(repoPath, commitMsg, nil, "origin", "")
+	err = git.CommitAndPush(repoPath, commitMsg, nil, "origin", "", tokenWrite)
 	if err != nil {
 		logger.LogError(err, "Git コミット・プッシュに失敗しました")
 		return fmt.Errorf("Git コミット・プッシュに失敗しました: %w", err)

@@ -35,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ GITHUB_TOKEN が設定されています")
+	fmt.Println("✓ GitHub Token が設定されています")
 
 	// コンテキストの作成
 	ctx := context.Background()
@@ -70,7 +70,6 @@ func main() {
 		SVGOutputDir:    ".",                                    // SVG ファイルの出力先
 		Timezone:        "UTC",                                  // タイムゾーン
 		CommitMessage:   "chore: update GitHub profile metrics", // Git コミットメッセージ
-		EnableGitPush:   false,                                  // デフォルトではプッシュしない（テストモード）
 		MaxRepositories: 0,                                      // 0 = すべてのリポジトリ
 		ExcludeForks:    excludeForks,
 		LogLevel:        logLevel, // ログレベル
@@ -78,7 +77,7 @@ func main() {
 
 	// ワークフローを実行
 	fmt.Println("\n🚀 メインワークフローを開始します...")
-	err = workflow.Run(ctx, cfg.GitHubToken, workflowConfig)
+	err = workflow.Run(ctx, cfg.GitHubTokenRead, cfg.GitHubTokenWrite, workflowConfig)
 	if err != nil {
 		fmt.Printf("エラー: ワークフローの実行に失敗しました: %v\n", err)
 		os.Exit(1)

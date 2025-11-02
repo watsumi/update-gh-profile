@@ -8,6 +8,9 @@
 # Compiled binaries
 update-gh-profile
 
+# docs
+schema.docs.graphql
+
 # Test binary, built with `go test -c`
 *.test
 

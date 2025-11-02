@@ -24,8 +24,8 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 ) {
 	logger.Info("GraphQLを使用してリポジトリ情報を一括取得します")
 
-	// 1. リポジトリ情報をGraphQLで一括取得
-	repoGraphQLData, err := repository.FetchRepositoriesWithGraphQL(ctx, token, username, excludeForks)
+	// 1. リポジトリ情報をGraphQLで一括取得（生成された型を使用）
+	repoGraphQLData, err := repository.FetchRepositoriesWithGraphQLGenerated(ctx, token, username, excludeForks)
 	if err != nil {
 		logger.LogError(err, "GraphQLによるリポジトリ情報の取得に失敗しました")
 		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("GraphQLによるリポジトリ情報の取得に失敗しました: %w", err)
@@ -33,8 +33,8 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 
 	logger.Info("%d 個のリポジトリ情報をGraphQLで取得しました", len(repoGraphQLData))
 
-	// 2. ユーザー詳細情報を取得（コミット数、PR数など）
-	userDetails, err := repository.FetchUserDetailsWithGraphQL(ctx, token, username)
+	// 2. ユーザー詳細情報を取得（コミット数、PR数など）（生成された型を使用）
+	userDetails, err := repository.FetchUserDetailsWithGraphQLGenerated(ctx, token, username)
 	if err != nil {
 		logger.LogError(err, "GraphQLによるユーザー詳細情報の取得に失敗しました")
 		// エラーは致命的ではないので、続行

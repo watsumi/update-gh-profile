@@ -178,8 +178,6 @@ query Viewer {
   viewer {
     login
     id
-    name
-    email
   }
 }`
 )

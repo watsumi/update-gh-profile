@@ -57,8 +57,8 @@ func Run(ctx context.Context, token string, config Config) error {
 		return fmt.Errorf("GITHUB_TOKEN が設定されていません")
 	}
 
-	// 認証ユーザー情報をGraphQLで取得
-	username, userID, err := repository.FetchViewer(ctx, token)
+	// 認証ユーザー情報をGraphQLで取得（生成された型を使用）
+	username, userID, err := repository.FetchViewerGenerated(ctx, token)
 	if err != nil {
 		logger.LogError(err, "認証ユーザー情報の取得に失敗しました")
 		return fmt.Errorf("認証ユーザー情報の取得に失敗しました: %w", err)

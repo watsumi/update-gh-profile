@@ -63,15 +63,20 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 		// 取得したリポジトリを追加
 		allRepos = append(allRepos, repos...)
 
+		// デバッグ: ページネーション情報をログに出力
 		log.Printf("取得したリポジトリ数: %d (累計: %d)", len(repos), len(allRepos))
+		log.Printf("ページネーション情報: 現在ページ=%d, 次ページ=%d, 最終ページ=%d",
+			opt.Page, resp.NextPage, resp.LastPage)
 
 		// 次のページがあるか確認
 		if resp.NextPage == 0 {
+			log.Printf("次のページがないため、ページネーションを終了します")
 			break // 次のページがない場合は終了
 		}
 
 		// 次のページを取得するためにページ番号を更新
 		opt.Page = resp.NextPage
+		log.Printf("次のページ (%d) を取得します...", resp.NextPage)
 	}
 
 	log.Printf("全リポジトリ取得完了: %d 件", len(allRepos))

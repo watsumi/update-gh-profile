@@ -153,6 +153,7 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 
 			// 502 Bad Gateway や 503 Service Unavailable などの一時的なエラーの場合はリトライ
 			lowerErrStr := strings.ToLower(errStr)
+			logger.Debug("エラー文字列（小文字）: %s", lowerErrStr)
 			isRetryableError := strings.Contains(lowerErrStr, "502") ||
 				strings.Contains(lowerErrStr, "503") ||
 				strings.Contains(lowerErrStr, "504") ||
@@ -162,7 +163,15 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 				strings.Contains(lowerErrStr, "gateway timeout") ||
 				strings.Contains(lowerErrStr, "request_error") ||
 				strings.Contains(lowerErrStr, "network") ||
-				strings.Contains(lowerErrStr, "connection")
+				strings.Contains(lowerErrStr, "connection") ||
+				strings.Contains(lowerErrStr, "stream error") ||
+				strings.Contains(lowerErrStr, "stream id") ||
+				strings.Contains(lowerErrStr, "cancel") ||
+				strings.Contains(lowerErrStr, "json_decode_error") ||
+				strings.Contains(lowerErrStr, "json decode") ||
+				strings.Contains(lowerErrStr, "decode error") ||
+				strings.Contains(lowerErrStr, "unmarshal") ||
+				strings.Contains(lowerErrStr, "parse error")
 
 			if !isRetryableError {
 				// 一時的なエラーでない場合は即座に返す

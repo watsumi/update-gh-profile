@@ -1,11 +1,11 @@
 name: 'Update GitHub Profile'
-description: 'GitHub ユーザーのリポジトリメトリクスを取得して、README.md を更新する'
+description: '認証ユーザー自身の GitHub リポジトリメトリクスを取得して、README.md を更新する'
 inputs:
   github_token:
-    description: 'GitHub Personal Access Token'
+    description: 'GitHub Personal Access Token（認証ユーザーのトークン）'
     required: false
   username:
-    description: 'GitHub ユーザー名（デフォルト: リポジトリのオーナー）'
+    description: '[非推奨] このパラメータは無視されます。認証ユーザー自身のリポジトリのみを取得します'
     required: false
     default: ''
   exclude_forks:
@@ -38,17 +38,13 @@ runs:
         echo "::group::リポジトリ一覧を取得"
         export GITHUB_TOKEN="${{ inputs.github_token || env.GITHUB_TOKEN }}"
         
-        USERNAME="${{ inputs.username }}"
-        if [ -z "$USERNAME" ]; then
-          USERNAME="${{ github.repository_owner }}"
-        fi
-        
         EXCLUDE_FORKS="${{ inputs.exclude_forks }}"
         if [ -z "$EXCLUDE_FORKS" ]; then
           EXCLUDE_FORKS="true"
         fi
         
-        # リポジトリ一覧を取得（出力はGoプログラム内で設定される）
-        go run ./cmd/update-gh-profile/main.go --username="$USERNAME" --exclude-forks="$EXCLUDE_FORKS" || exit 1
+        # リポジトリ一覧を取得（認証ユーザー自身のリポジトリのみ）
+        # username パラメータは指定しません（認証ユーザーが自動的に使用されます）
+        go run ./cmd/update-gh-profile/main.go --exclude-forks="$EXCLUDE_FORKS" || exit 1
         echo "::endgroup::"
 

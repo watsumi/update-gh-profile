@@ -9,28 +9,36 @@ import (
 	"github.com/google/go-github/v56/github"
 )
 
-// FetchUserRepositories GitHub API を使用してユーザーのリポジトリ一覧を取得する
+// FetchUserRepositories GitHub API を使用して認証ユーザーのリポジトリ一覧を取得する
 //
 // Preconditions:
 // - username が非空文字列であること
 // - client が有効な GitHub クライアントであること
+// - isAuthenticatedUser が true であること（認証ユーザー自身のみ対応）
 //
 // Postconditions:
 // - フォークを除外する場合は、Fork=false のリポジトリのみが返される
 // - スライスはリポジトリ構造体のスライスである
+// - 認証ユーザー自身のリポジトリ（プライベート含む）を取得する
 //
 // Invariants:
 // - API レート制限に達した場合は待機して再試行する
-func FetchUserRepositories(ctx context.Context, client *github.Client, username string, excludeForks bool) ([]*github.Repository, error) {
+// - 認証ユーザー自身のリポジトリのみを取得する
+func FetchUserRepositories(ctx context.Context, client *github.Client, username string, excludeForks bool, isAuthenticatedUser bool) ([]*github.Repository, error) {
 	if username == "" {
 		return nil, fmt.Errorf("username が空です")
 	}
 
-	log.Printf("リポジトリ一覧を取得しています: ユーザー=%s, フォーク除外=%v", username, excludeForks)
+	if !isAuthenticatedUser {
+		return nil, fmt.Errorf("このツールは認証ユーザー自身のリポジトリのみを取得できます")
+	}
+
+	log.Printf("リポジトリ一覧を取得しています: 認証ユーザー=%s, フォーク除外=%v", username, excludeForks)
 
 	// ページネーション用のオプション
+	// Type: "all" を指定することで、プライベートリポジトリも含めて取得
 	opt := &github.RepositoryListOptions{
-		Type:        "all", // all, owner, member から選択
+		Type:        "all", // all, owner, member から選択（認証ユーザーの場合は all でプライベートも取得可能）
 		Sort:        "updated",
 		Direction:   "desc",
 		ListOptions: github.ListOptions{PerPage: 100}, // 1ページあたりの最大件数
@@ -39,9 +47,10 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 	var allRepos []*github.Repository
 
 	// ページネーションループ: 全ページを取得するまで繰り返す
+	// username を空文字列にすると、認証ユーザー自身のリポジトリ（プライベート含む）を取得
 	for {
-		// GitHub API を呼び出してリポジトリ一覧を取得
-		repos, resp, err := client.Repositories.List(ctx, username, opt)
+		repos, resp, err := client.Repositories.List(ctx, "", opt)
+
 		if err != nil {
 			return nil, fmt.Errorf("リポジトリ一覧の取得に失敗しました: %w", err)
 		}

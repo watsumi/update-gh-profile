@@ -17,7 +17,7 @@ import (
 func main() {
 	// コマンドライン引数のパース
 	var (
-		usernameFlag    = flag.String("username", "", "GitHub ユーザー名（省略時は環境変数 GITHUB_USERNAME または認証ユーザー）")
+		usernameFlag    = flag.String("username", "", "[非推奨・無視されます] このツールは認証ユーザー自身のリポジトリのみを取得します")
 		excludeForksStr = flag.String("exclude-forks", "true", "フォークリポジトリを除外するか（true/false）")
 	)
 	flag.Parse()
@@ -47,24 +47,34 @@ func main() {
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
 
+	// 認証ユーザーを取得（必須）
+	authUser, _, err := client.Users.Get(ctx, "")
+	if err != nil {
+		fmt.Printf("エラー: 認証ユーザー情報の取得に失敗しました: %v\n", err)
+		os.Exit(1)
+	}
+	authenticatedUsername := authUser.GetLogin()
+
 	// 対象ユーザー名の決定（優先順位: コマンドライン引数 > 環境変数 > 認証ユーザー）
 	targetUser := *usernameFlag
 	if targetUser == "" {
 		targetUser = cfg.GetTargetUser()
 		if targetUser == "" {
-			user, _, err := client.Users.Get(ctx, "")
-			if err != nil {
-				fmt.Printf("エラー: ユーザー情報の取得に失敗しました: %v\n", err)
-				os.Exit(1)
-			}
-			targetUser = user.GetLogin()
-			fmt.Printf("✓ 認証ユーザー: %s\n", targetUser)
-		} else {
-			fmt.Printf("✓ 対象ユーザー（環境変数）: %s\n", targetUser)
+			// 認証ユーザーを使用（デフォルト）
+			targetUser = authenticatedUsername
 		}
-	} else {
-		fmt.Printf("✓ 対象ユーザー（コマンドライン）: %s\n", targetUser)
 	}
+
+	// 認証ユーザー以外を指定した場合はエラー
+	if targetUser != authenticatedUsername {
+		fmt.Printf("エラー: 認証ユーザー（%s）以外のリポジトリを取得することはできません\n", authenticatedUsername)
+		fmt.Printf("指定されたユーザー: %s\n", targetUser)
+		fmt.Println("\nこのツールは認証ユーザー自身のリポジトリのみを取得できます。")
+		os.Exit(1)
+	}
+
+	// 認証ユーザー自身であることを確認
+	fmt.Printf("✓ 認証ユーザー: %s（プライベートリポジトリも取得します）\n", targetUser)
 
 	// フォーク除外の設定
 	excludeForks, err := strconv.ParseBool(*excludeForksStr)
@@ -75,9 +85,9 @@ func main() {
 
 	fmt.Println("\n✅ GitHub API クライアントの初期化に成功しました！")
 
-	// リポジトリ一覧の取得
+	// リポジトリ一覧の取得（認証ユーザー自身のリポジトリのみ）
 	fmt.Println("\n📦 リポジトリ一覧を取得しています...")
-	repos, err := repository.FetchUserRepositories(ctx, client, targetUser, excludeForks)
+	repos, err := repository.FetchUserRepositories(ctx, client, targetUser, excludeForks, true) // 常に認証ユーザーとして取得
 	if err != nil {
 		fmt.Printf("エラー: リポジトリ一覧の取得に失敗しました: %v\n", err)
 		os.Exit(1)

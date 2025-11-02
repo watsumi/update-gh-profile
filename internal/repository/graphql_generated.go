@@ -7,6 +7,7 @@ import (
 	"time"
 
 	ghgraphql "github.com/watsumi/update-gh-profile/internal/graphql"
+	"github.com/watsumi/update-gh-profile/internal/logger"
 )
 
 // FetchViewerGenerated 生成された型を使用して認証ユーザー情報を取得
@@ -98,36 +99,58 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 		var query ghgraphql.ReposQuery
 
 		// リトライロジック: 502 Bad Gatewayなどの一時的なエラーに対応
-		const maxRetries = 3
-		const retryDelay = 2 * time.Second
+		const maxRetries = 5
+		const baseRetryDelay = 5 * time.Second
 		var lastErr error
 
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			if attempt > 0 {
-				// リトライ前に待機
+				// 指数バックオフでリトライ前に待機
+				// 1回目: 5秒、2回目: 10秒、3回目: 20秒、4回目: 40秒
+				retryDelay := baseRetryDelay * time.Duration(1<<uint(attempt-1))
+				logger.Info("GraphQLクエリのリトライ: %d/%d回目（%v待機後）", attempt+1, maxRetries, retryDelay)
 				select {
 				case <-ctx.Done():
 					return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
-				case <-time.After(retryDelay * time.Duration(attempt)):
-					// 指数バックオフ
+				case <-time.After(retryDelay):
+					// 待機完了
 				}
 			}
 
+			logger.Debug("GraphQLクエリを実行中（試行 %d/%d）...", attempt+1, maxRetries)
 			err = graphqlClient.Exec(ctx, queryStr, &query, variables)
 			if err == nil {
+				if attempt > 0 {
+					logger.Info("GraphQLクエリが成功しました（%d回目の試行で成功）", attempt+1)
+				}
 				break // 成功
 			}
 
 			lastErr = err
-			// 502 Bad Gateway や 503 Service Unavailable などの一時的なエラーの場合はリトライ
 			errStr := err.Error()
-			if !strings.Contains(errStr, "502") && !strings.Contains(errStr, "503") && !strings.Contains(errStr, "timeout") {
+			logger.Warning("GraphQLクエリの実行に失敗しました（試行 %d/%d）: %v", attempt+1, maxRetries, err)
+
+			// 502 Bad Gateway や 503 Service Unavailable などの一時的なエラーの場合はリトライ
+			lowerErrStr := strings.ToLower(errStr)
+			isRetryableError := strings.Contains(lowerErrStr, "502") ||
+				strings.Contains(lowerErrStr, "503") ||
+				strings.Contains(lowerErrStr, "504") ||
+				strings.Contains(lowerErrStr, "timeout") ||
+				strings.Contains(lowerErrStr, "bad gateway") ||
+				strings.Contains(lowerErrStr, "service unavailable") ||
+				strings.Contains(lowerErrStr, "gateway timeout") ||
+				strings.Contains(lowerErrStr, "request_error") ||
+				strings.Contains(lowerErrStr, "network") ||
+				strings.Contains(lowerErrStr, "connection")
+
+			if !isRetryableError {
 				// 一時的なエラーでない場合は即座に返す
-				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました（リトライ不可なエラー）: %w", err)
 			}
 
 			// 最後の試行でエラーが残っている場合はログに記録
 			if attempt == maxRetries-1 {
+				logger.Error("GraphQLクエリの実行に失敗しました（%d回リトライ後）: %v", maxRetries, lastErr)
 				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました（%d回リトライ後）: %w", maxRetries, lastErr)
 			}
 		}

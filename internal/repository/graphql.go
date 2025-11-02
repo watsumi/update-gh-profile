@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/hasura/go-graphql-client"
@@ -192,6 +194,21 @@ func newGraphQLClient(ctx context.Context, token string) (*graphql.Client, error
 	httpClient := oauth2.NewClient(ctx, oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	))
+
+	// HTTPクライアントにタイムアウトを設定
+	// 読み取りタイムアウト: 60秒
+	httpClient.Timeout = 60 * time.Second
+
+	// Transportに接続タイムアウトを設定
+	if oauth2Transport, ok := httpClient.Transport.(*oauth2.Transport); ok {
+		if baseTransport, ok := oauth2Transport.Base.(*http.Transport); ok {
+			if baseTransport.DialContext == nil {
+				baseTransport.DialContext = (&net.Dialer{
+					Timeout: 30 * time.Second,
+				}).DialContext
+			}
+		}
+	}
 
 	// GraphQLクライアントを作成
 	graphqlClient := graphql.NewClient("https://api.github.com/graphql", httpClient)

@@ -283,7 +283,7 @@ func main() {
 			} else {
 				// SVG をファイルに保存（テスト用）
 				outputPath := "language_chart.svg"
-				err = os.WriteFile(outputPath, []byte(svg), 0644)
+				err = generator.SaveSVG(svg, outputPath)
 				if err != nil {
 					fmt.Printf("  ⚠️  ファイル保存エラー: %v\n", err)
 				} else {
@@ -490,6 +490,23 @@ func main() {
 						fmt.Printf("  - %s: %d コミット\n", pair.Date, pair.Count)
 					}
 				}
+
+				// SVG グラフを生成
+				fmt.Printf("\n🎨 コミット推移の SVG グラフを生成中...\n")
+				svg, err := generator.GenerateCommitHistoryChart(aggregatedHistory)
+				if err != nil {
+					fmt.Printf("  ⚠️  SVG生成エラー: %v\n", err)
+				} else {
+					// SVG をファイルに保存（テスト用）
+					outputPath := "commit_history_chart.svg"
+					err = os.WriteFile(outputPath, []byte(svg), 0644)
+					if err != nil {
+						fmt.Printf("  ⚠️  ファイル保存エラー: %v\n", err)
+					} else {
+						fmt.Printf("  ✅ SVG グラフを生成しました: %s\n", outputPath)
+						fmt.Printf("    （SVGサイズ: %d バイト）\n", len(svg))
+					}
+				}
 			}
 		}
 
@@ -533,6 +550,23 @@ func main() {
 						item := hourList[i]
 						fmt.Printf("  %d. %02d時: %d コミット\n", i+1, item.hour, item.count)
 					}
+				}
+			}
+
+			// SVG グラフを生成
+			fmt.Printf("\n🎨 コミット時間帯分布の SVG グラフを生成中...\n")
+			svg, err := generator.GenerateCommitTimeChart(aggregatedTimeDist)
+			if err != nil {
+				fmt.Printf("  ⚠️  SVG生成エラー: %v\n", err)
+			} else {
+				// SVG をファイルに保存（テスト用）
+				outputPath := "commit_time_chart.svg"
+				err = os.WriteFile(outputPath, []byte(svg), 0644)
+				if err != nil {
+					fmt.Printf("  ⚠️  ファイル保存エラー: %v\n", err)
+				} else {
+					fmt.Printf("  ✅ SVG グラフを生成しました: %s\n", outputPath)
+					fmt.Printf("    （SVGサイズ: %d バイト）\n", len(svg))
 				}
 			}
 		}
@@ -613,6 +647,23 @@ func main() {
 				fmt.Printf("\n🏆 コミットごとの使用言語 Top5:\n")
 				for i, item := range langList {
 					fmt.Printf("  %d. %s: %d ファイル\n", i+1, item.lang, item.count)
+				}
+
+				// SVG グラフを生成
+				fmt.Printf("\n🎨 コミットごとの使用言語Top5の SVG グラフを生成中...\n")
+				svg, err := generator.GenerateCommitLanguagesChart(top5Languages)
+				if err != nil {
+					fmt.Printf("  ⚠️  SVG生成エラー: %v\n", err)
+				} else {
+					// SVG をファイルに保存（テスト用）
+					outputPath := "commit_languages_chart.svg"
+					err = os.WriteFile(outputPath, []byte(svg), 0644)
+					if err != nil {
+						fmt.Printf("  ⚠️  ファイル保存エラー: %v\n", err)
+					} else {
+						fmt.Printf("  ✅ SVG グラフを生成しました: %s\n", outputPath)
+						fmt.Printf("    （SVGサイズ: %d バイト）\n", len(svg))
+					}
 				}
 			} else {
 				fmt.Println("⚠️  集計できる言語データがありませんでした")
@@ -800,6 +851,23 @@ func main() {
 		fmt.Printf("  📦 リポジトリ数: %d\n", summaryStats.RepositoryCount)
 		fmt.Printf("  📝 総コミット数: %d\n", summaryStats.TotalCommits)
 		fmt.Printf("  🔀 総プルリクエスト数: %d\n", summaryStats.TotalPullRequests)
+
+		// SVG カードを生成
+		fmt.Printf("\n🎨 サマリーカードの SVG を生成中...\n")
+		svg, err := generator.GenerateSummaryCard(summaryStats)
+		if err != nil {
+			fmt.Printf("  ⚠️  SVG生成エラー: %v\n", err)
+		} else {
+			// SVG をファイルに保存（テスト用）
+			outputPath := "summary_card.svg"
+			err = os.WriteFile(outputPath, []byte(svg), 0644)
+			if err != nil {
+				fmt.Printf("  ⚠️  ファイル保存エラー: %v\n", err)
+			} else {
+				fmt.Printf("  ✅ SVG カードを生成しました: %s\n", outputPath)
+				fmt.Printf("    （SVGサイズ: %d バイト）\n", len(svg))
+			}
+		}
 
 		fmt.Println("\n✅ サマリー統計集計のテストが完了しました")
 	}

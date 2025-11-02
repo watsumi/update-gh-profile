@@ -1,0 +1,152 @@
+package generator
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/watsumi/update-gh-profile/internal/aggregator"
+)
+
+// GenerateSummaryCard スター数、リポジトリ数、コミット数、PR数を表示するサマリーカードの SVG を生成する
+//
+// Preconditions:
+// - stats が有効な SummaryStats 構造体であること
+//
+// Postconditions:
+// - 返される文字列は有効な SVG 形式である
+// - SVG には4つのメトリクス（スター、リポジトリ、コミット、PR）が表示される
+//
+// Invariants:
+// - すべてのメトリクスがカード形式で表示される
+// - アイコンと数値が適切に配置される
+func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
+	// SVG のサイズを設定
+	width := DefaultSVGWidth
+	height := 140
+	padding := 20
+	cardSpacing := 15
+	cardWidth := (width - padding*2 - cardSpacing*3) / 4 // 4つのカードを配置
+
+	// SVG を構築
+	var svg strings.Builder
+
+	// ヘッダー
+	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
+
+	// 背景
+	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="8"/>
+`, width, height, DefaultBackgroundColor))
+
+	// タイトル（省略可能、カードだけでも見やすい）
+	// svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">統計サマリー</text>
+	// `, width/2, 30, DefaultTextColor))
+
+	// メトリクス定義
+	type metric struct {
+		label string
+		value int
+		icon  string
+		color string
+	}
+
+	metrics := []metric{
+		{
+			label: "スター",
+			value: stats.TotalStars,
+			icon:  "⭐",
+			color: "#ffd700",
+		},
+		{
+			label: "リポジトリ",
+			value: stats.RepositoryCount,
+			icon:  "📦",
+			color: "#58a6ff",
+		},
+		{
+			label: "コミット",
+			value: stats.TotalCommits,
+			icon:  "💾",
+			color: "#56d364",
+		},
+		{
+			label: "プルリク",
+			value: stats.TotalPullRequests,
+			icon:  "🔀",
+			color: "#a371f7",
+		},
+	}
+
+	// 各メトリクスのカードを描画
+	startX := padding
+	cardY := 40
+	iconSize := 32
+	iconY := cardY + iconSize - 10
+	valueY := cardY + iconSize + 35
+	labelY := cardY + iconSize + 55
+
+	for i, m := range metrics {
+		cardX := startX + i*(cardWidth+cardSpacing)
+
+		// カードの背景（軽いグロー効果）
+		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="6" opacity="0.1"/>
+`, cardX, cardY, cardWidth, height-cardY-padding, m.color))
+
+		// カードの枠線
+		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="none" stroke="%s" stroke-width="1" rx="6" opacity="0.3"/>
+`, cardX, cardY, cardWidth, height-cardY-padding, m.color))
+
+		// アイコン
+		iconX := cardX + cardWidth/2
+		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif" font-size="%d" text-anchor="middle">%s</text>
+`, iconX, iconY, iconSize, m.icon))
+
+		// 数値（大きなフォント）
+		valueText := formatNumber(m.value)
+		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="600" fill="%s" text-anchor="middle">%s</text>
+`, iconX, valueY, DefaultTextColor, valueText))
+
+		// ラベル
+		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s" text-anchor="middle" opacity="0.7">%s</text>
+`, iconX, labelY, DefaultTextColor, m.label))
+	}
+
+	// フッター
+	svg.WriteString(SVGFooter)
+
+	return svg.String(), nil
+}
+
+// formatNumber 数値を3桁区切りの文字列にフォーマットする
+// 例: 1234 -> "1,234", 1000000 -> "1M"
+func formatNumber(n int) string {
+	if n < 0 {
+		return "0"
+	}
+
+	// 百万単位
+	if n >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(n)/1000000.0)
+	}
+
+	// 千単位
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fK", float64(n)/1000.0)
+	}
+
+	// 3桁区切り
+	str := fmt.Sprintf("%d", n)
+	if len(str) <= 3 {
+		return str
+	}
+
+	// 3桁ごとにカンマを挿入
+	result := ""
+	for i, r := range str {
+		if i > 0 && (len(str)-i)%3 == 0 {
+			result += ","
+		}
+		result += string(r)
+	}
+
+	return result
+}

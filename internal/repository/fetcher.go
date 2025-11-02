@@ -38,7 +38,7 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 	// Type: "all" を指定することで、プライベートリポジトリも含めて取得
 	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
 	opt := &github.RepositoryListOptions{
-		Type:      "all", // all, owner, member から選択（認証ユーザーの場合は all でプライベートも取得可能）
+		Type:      "owner", // all, owner, member から選択（認証ユーザーの場合は all でプライベートも取得可能）
 		Sort:      "updated",
 		Direction: "desc",
 		ListOptions: github.ListOptions{

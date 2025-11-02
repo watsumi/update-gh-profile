@@ -83,93 +83,66 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 		fmt.Printf("📊 最初の %d 個のリポジトリのみを処理します\n", config.MaxRepositories)
 	}
 
-	// 2. データの取得と集計
+	// 2. データの取得と集計（並列処理）
 	fmt.Println("\n📊 リポジトリデータを取得・集計しています...")
+	logger.Info("リポジトリを並列処理します: 総数=%d", len(repos))
 
-	// 言語データの集計
+	// 並列処理でリポジトリデータを取得
+	maxConcurrency := 5 // 最大並列数（環境変数から設定可能にする場合の拡張ポイント）
+	repoDataList, err := ProcessRepositoriesInParallel(ctx, client, repos, maxConcurrency)
+	if err != nil {
+		logger.LogError(err, "リポジトリの並列処理に失敗しました")
+		return fmt.Errorf("リポジトリの並列処理に失敗しました: %w", err)
+	}
+
+	// 取得したデータを集計
 	languageTotals := make(map[string]int)
 	commitHistories := make(map[string]map[string]int)    // repoKey -> date -> count
 	timeDistributions := make(map[string]map[int]int)     // repoKey -> hour -> count
 	allCommitLanguages := make(map[string]map[string]int) // repoKey -> commitSHA -> languages
 	var totalCommits, totalPRs int
 
-	for i, repo := range repos {
-		owner := repo.GetOwner().GetLogin()
-		repoName := repo.GetName()
-
-		fmt.Printf("  [%d/%d] %s/%s を処理中...\n", i+1, len(repos), owner, repoName)
-
-		// リポジトリキー（エラーログ用）
-		repoKey := fmt.Sprintf("%s/%s", owner, repoName)
-
-		// 言語データの取得
-		langs, err := repository.FetchRepositoryLanguages(ctx, client, owner, repoName)
-		if err != nil {
-			logger.LogErrorWithContext(err, repoKey, "言語データの取得に失敗しました")
-			fmt.Printf("    ⚠️  言語データの取得に失敗: %v\n", err)
+	for _, data := range repoDataList {
+		if data == nil {
 			continue
 		}
 
+		repoKey := fmt.Sprintf("%s/%s", data.Owner, data.RepoName)
+
 		// 言語データを集計
-		for lang, bytes := range langs {
+		for lang, bytes := range data.Languages {
 			languageTotals[lang] += bytes
 		}
 
-		// コミット履歴の取得
-		commitHistory, err := repository.FetchCommitHistory(ctx, client, owner, repoName)
-		if err != nil {
-			logger.LogErrorWithContext(err, repoKey, "コミット履歴の取得に失敗しました")
-			fmt.Printf("    ⚠️  コミット履歴の取得に失敗: %v\n", err)
-		} else {
-			commitHistories[repoKey] = commitHistory
-			logger.Debug("%s: %d 日分のコミット履歴を取得しました", repoKey, len(commitHistory))
+		// コミット履歴を集計
+		if len(data.CommitHistory) > 0 {
+			commitHistories[repoKey] = data.CommitHistory
+			logger.Debug("%s: %d 日分のコミット履歴を取得しました", repoKey, len(data.CommitHistory))
 		}
 
-		// コミット時間帯の取得
-		timeDist, err := repository.FetchCommitTimeDistribution(ctx, client, owner, repoName)
-		if err != nil {
-			logger.LogErrorWithContext(err, repoKey, "コミット時間帯の取得に失敗しました")
-			fmt.Printf("    ⚠️  コミット時間帯の取得に失敗: %v\n", err)
-		} else {
-			timeDistributions[repoKey] = timeDist
+		// コミット時間帯を集計
+		if len(data.TimeDistribution) > 0 {
+			timeDistributions[repoKey] = data.TimeDistribution
 		}
 
-		// コミット数の取得（概算）
-		commits, err := repository.FetchCommits(ctx, client, owner, repoName)
-		if err != nil {
-			logger.LogErrorWithContext(err, repoKey, "コミットデータの取得に失敗しました")
-			fmt.Printf("    ⚠️  コミットデータの取得に失敗: %v\n", err)
-		} else {
-			totalCommits += len(commits)
-			logger.Debug("%s: %d コミットを取得しました", repoKey, len(commits))
+		// コミット数を集計
+		totalCommits += data.CommitCount
+		if data.CommitCount > 0 {
+			logger.Debug("%s: %d コミットを取得しました", repoKey, data.CommitCount)
 		}
 
-		// コミットごとの言語取得
-		commitLangs, err := repository.FetchCommitLanguages(ctx, client, owner, repoName)
-		if err != nil {
-			logger.LogErrorWithContext(err, repoKey, "コミット言語データの取得に失敗しました")
-			fmt.Printf("    ⚠️  コミット言語データの取得に失敗: %v\n", err)
-		} else if len(commitLangs) > 0 {
-			// repoKeyをプレフィックスとして追加
-			repoCommitLangs := make(map[string]map[string]int)
-			for sha, langs := range commitLangs {
+		// コミットごとの言語を集計
+		if len(data.CommitLanguages) > 0 {
+			for sha, langs := range data.CommitLanguages {
 				uniqueSHA := fmt.Sprintf("%s:%s", repoKey, sha)
-				repoCommitLangs[uniqueSHA] = langs
-			}
-			// マップにマージ
-			for k, v := range repoCommitLangs {
-				allCommitLanguages[k] = v
+				allCommitLanguages[uniqueSHA] = langs
 			}
 		}
 
-		// プルリクエスト数の取得
-		prCount, err := repository.FetchPullRequests(ctx, client, owner, repoName)
-		if err != nil {
-			logger.LogErrorWithContext(err, repoKey, "プルリクエストデータの取得に失敗しました")
-			fmt.Printf("    ⚠️  プルリクエストデータの取得に失敗: %v\n", err)
-		} else {
-			totalPRs += prCount
-			logger.Debug("%s: %d プルリクエストを取得しました", repoKey, prCount)
+		// プルリクエスト数を集計
+		totalPRs += data.PRCount
+		if data.PRCount > 0 {
+			logger.Debug("%s: %d プルリクエストを取得しました", repoKey, data.PRCount)
 		}
 	}
 

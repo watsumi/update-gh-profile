@@ -211,12 +211,10 @@ func FetchViewer(ctx context.Context, token string) (string, string, error) {
 	variables := map[string]interface{}{}
 
 	var response struct {
-		Data struct {
-			Viewer struct {
-				Login string `json:"login"`
-				ID    string `json:"id"`
-			} `json:"viewer"`
-		} `json:"data"`
+		Viewer struct {
+			Login string `json:"login"`
+			ID    string `json:"id"`
+		} `json:"viewer"`
 	}
 
 	err = graphqlClient.Exec(ctx, QueryViewer, &response, variables)
@@ -224,7 +222,7 @@ func FetchViewer(ctx context.Context, token string) (string, string, error) {
 		return "", "", fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
 	}
 
-	return response.Data.Viewer.Login, response.Data.Viewer.ID, nil
+	return response.Viewer.Login, response.Viewer.ID, nil
 }
 
 // FetchRepositoriesWithGraphQL GraphQLを使用してリポジトリ情報を一括取得する
@@ -248,17 +246,15 @@ func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username st
 
 		// GraphQLクエリを実行（文字列クエリを使用）
 		var response struct {
-			Data struct {
-				User struct {
-					Repositories struct {
-						Nodes    []*RepositoryGraphQLData `json:"nodes"`
-						PageInfo struct {
-							EndCursor   string `json:"endCursor"`
-							HasNextPage bool   `json:"hasNextPage"`
-						} `json:"pageInfo"`
-					} `json:"repositories"`
-				} `json:"user"`
-			} `json:"data"`
+			User struct {
+				Repositories struct {
+					Nodes    []*RepositoryGraphQLData `json:"nodes"`
+					PageInfo struct {
+						EndCursor   string `json:"endCursor"`
+						HasNextPage bool   `json:"hasNextPage"`
+					} `json:"pageInfo"`
+				} `json:"repositories"`
+			} `json:"user"`
 		}
 
 		// Execを使用してクエリを実行
@@ -267,12 +263,12 @@ func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username st
 			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
 		}
 
-		allRepos = append(allRepos, response.Data.User.Repositories.Nodes...)
+		allRepos = append(allRepos, response.User.Repositories.Nodes...)
 
-		if !response.Data.User.Repositories.PageInfo.HasNextPage {
+		if !response.User.Repositories.PageInfo.HasNextPage {
 			break
 		}
-		endCursor = &response.Data.User.Repositories.PageInfo.EndCursor
+		endCursor = &response.User.Repositories.PageInfo.EndCursor
 	}
 
 	return allRepos, nil
@@ -325,9 +321,7 @@ func FetchUserDetailsWithGraphQL(ctx context.Context, token string, username str
 	}
 
 	var response struct {
-		Data struct {
-			User UserDetailsGraphQLData `json:"user"`
-		} `json:"data"`
+		User UserDetailsGraphQLData `json:"user"`
 	}
 
 	err = graphqlClient.Exec(ctx, QueryUserDetails, &response, variables)
@@ -335,7 +329,7 @@ func FetchUserDetailsWithGraphQL(ctx context.Context, token string, username str
 		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
 	}
 
-	return &response.Data.User, nil
+	return &response.User, nil
 }
 
 // UserDetailsGraphQLData GraphQLから取得したユーザー詳細データ
@@ -387,38 +381,36 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 	}
 
 	var response struct {
-		Data struct {
-			User struct {
-				ContributionsCollection struct {
-					CommitContributionsByRepository []struct {
-						Repository struct {
-							Name            string    `json:"name"`
-							Owner           OwnerData `json:"owner"`
-							PrimaryLanguage struct {
-								Name string `json:"name"`
-							} `json:"primaryLanguage"`
-							DefaultBranchRef struct {
-								Target struct {
-									History struct {
-										Edges []struct {
-											Node struct {
-												Message       string `json:"message"`
-												CommittedDate string `json:"committedDate"`
-												Additions     int    `json:"additions"`
-												Deletions     int    `json:"deletions"`
-											} `json:"node"`
-										} `json:"edges"`
-									} `json:"history"`
-								} `json:"target"`
-							} `json:"defaultBranchRef"`
-						} `json:"repository"`
-						Contributions struct {
-							TotalCount int `json:"totalCount"`
-						} `json:"contributions"`
-					} `json:"commitContributionsByRepository"`
-				} `json:"contributionsCollection"`
-			} `json:"user"`
-		} `json:"data"`
+		User struct {
+			ContributionsCollection struct {
+				CommitContributionsByRepository []struct {
+					Repository struct {
+						Name            string    `json:"name"`
+						Owner           OwnerData `json:"owner"`
+						PrimaryLanguage struct {
+							Name string `json:"name"`
+						} `json:"primaryLanguage"`
+						DefaultBranchRef struct {
+							Target struct {
+								History struct {
+									Edges []struct {
+										Node struct {
+											Message       string `json:"message"`
+											CommittedDate string `json:"committedDate"`
+											Additions     int    `json:"additions"`
+											Deletions     int    `json:"deletions"`
+										} `json:"node"`
+									} `json:"edges"`
+								} `json:"history"`
+							} `json:"target"`
+						} `json:"defaultBranchRef"`
+					} `json:"repository"`
+					Contributions struct {
+						TotalCount int `json:"totalCount"`
+					} `json:"contributions"`
+				} `json:"commitContributionsByRepository"`
+			} `json:"contributionsCollection"`
+		} `json:"user"`
 	}
 
 	err = graphqlClient.Exec(ctx, QueryCommitLanguages, &response, variables)
@@ -428,7 +420,7 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 
 	// データを変換
 	commitLanguages := make(map[string]map[string]int)
-	for _, repoContrib := range response.Data.User.ContributionsCollection.CommitContributionsByRepository {
+	for _, repoContrib := range response.User.ContributionsCollection.CommitContributionsByRepository {
 		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {
 			// コミットSHAの代わりに日時を使用（簡易版）
 			commitKey := edge.Node.CommittedDate
@@ -465,29 +457,27 @@ func FetchProductiveTimeWithGraphQL(ctx context.Context, token string, username,
 	}
 
 	var response struct {
-		Data struct {
-			User struct {
-				ContributionsCollection struct {
-					CommitContributionsByRepository []struct {
-						Repository struct {
-							Name             string    `json:"name"`
-							Owner            OwnerData `json:"owner"`
-							DefaultBranchRef struct {
-								Target struct {
-									History struct {
-										Edges []struct {
-											Node struct {
-												CommittedDate string `json:"committedDate"`
-											} `json:"node"`
-										} `json:"edges"`
-									} `json:"history"`
-								} `json:"target"`
-							} `json:"defaultBranchRef"`
-						} `json:"repository"`
-					} `json:"commitContributionsByRepository"`
-				} `json:"contributionsCollection"`
-			} `json:"user"`
-		} `json:"data"`
+		User struct {
+			ContributionsCollection struct {
+				CommitContributionsByRepository []struct {
+					Repository struct {
+						Name             string    `json:"name"`
+						Owner            OwnerData `json:"owner"`
+						DefaultBranchRef struct {
+							Target struct {
+								History struct {
+									Edges []struct {
+										Node struct {
+											CommittedDate string `json:"committedDate"`
+										} `json:"node"`
+									} `json:"edges"`
+								} `json:"history"`
+							} `json:"target"`
+						} `json:"defaultBranchRef"`
+					} `json:"repository"`
+				} `json:"commitContributionsByRepository"`
+			} `json:"contributionsCollection"`
+		} `json:"user"`
 	}
 
 	err = graphqlClient.Exec(ctx, QueryProductiveTime, &response, variables)
@@ -497,7 +487,7 @@ func FetchProductiveTimeWithGraphQL(ctx context.Context, token string, username,
 
 	// 時間帯ごとのコミット数を集計
 	timeDistribution := make(map[int]int)
-	for _, repoContrib := range response.Data.User.ContributionsCollection.CommitContributionsByRepository {
+	for _, repoContrib := range response.User.ContributionsCollection.CommitContributionsByRepository {
 		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {
 			committedDate, err := time.Parse(time.RFC3339, edge.Node.CommittedDate)
 			if err != nil {

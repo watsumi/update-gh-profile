@@ -402,6 +402,210 @@ func main() {
 		fmt.Println("\n✅ コミット情報の取得テストが完了しました")
 	}
 
+	// コミット履歴と時間帯分布の集計テスト（最初の3件のリポジトリに対して）
+	if len(repos) > 0 {
+		fmt.Println("\n📊 全リポジトリのコミット履歴と時間帯分布を集計しています...")
+
+		// リポジトリごとのコミット履歴を格納する map
+		commitHistories := make(map[string]map[string]int)
+		// リポジトリごとの時間帯分布を格納する map
+		timeDistributions := make(map[string]map[int]int)
+
+		testCount := 3
+		if len(repos) < testCount {
+			testCount = len(repos)
+		}
+
+		// 各リポジトリのコミット履歴と時間帯分布を取得
+		for i := 0; i < testCount; i++ {
+			repo := repos[i]
+			owner := repo.GetOwner().GetLogin()
+			repoName := repo.GetName()
+			repoKey := fmt.Sprintf("%s/%s", owner, repoName)
+
+			fmt.Printf("  [%d/%d] %s のコミット情報を取得中...\n", i+1, testCount, repoKey)
+
+			// コミット履歴の取得
+			history, err := repository.FetchCommitHistory(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  コミット履歴取得エラー: %v\n", err)
+			} else {
+				commitHistories[repoKey] = history
+				fmt.Printf("    ✅ コミット履歴: %d 日分\n", len(history))
+			}
+
+			// 時間帯分布の取得
+			timeDist, err := repository.FetchCommitTimeDistribution(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  時間帯分布取得エラー: %v\n", err)
+			} else {
+				timeDistributions[repoKey] = timeDist
+				fmt.Printf("    ✅ 時間帯分布: %d 時間帯\n", len(timeDist))
+			}
+		}
+
+		// コミット履歴を集計
+		if len(commitHistories) > 0 {
+			fmt.Printf("\n📅 コミット履歴を集計中...\n")
+			aggregatedHistory := aggregator.AggregateCommitHistory(commitHistories)
+
+			if len(aggregatedHistory) > 0 {
+				fmt.Printf("✅ 集計完了: %d 日分\n", len(aggregatedHistory))
+
+				// 日付順でソート
+				sortedHistory := aggregator.SortCommitHistoryByDate(aggregatedHistory)
+
+				// 最新の5日分を表示
+				maxDisplay := 5
+				if len(sortedHistory) < maxDisplay {
+					maxDisplay = len(sortedHistory)
+				}
+
+				if maxDisplay > 0 {
+					startIdx := len(sortedHistory) - maxDisplay
+					if startIdx < 0 {
+						startIdx = 0
+					}
+					fmt.Printf("\n📈 最近のコミット履歴（%d日分）:\n", maxDisplay)
+					for i := startIdx; i < len(sortedHistory); i++ {
+						pair := sortedHistory[i]
+						fmt.Printf("  - %s: %d コミット\n", pair.Date, pair.Count)
+					}
+				}
+			}
+		}
+
+		// 時間帯分布を集計
+		if len(timeDistributions) > 0 {
+			fmt.Printf("\n🕐 コミット時間帯分布を集計中...\n")
+			aggregatedTimeDist := aggregator.AggregateCommitTimeDistribution(timeDistributions)
+
+			if len(aggregatedTimeDist) > 0 {
+				fmt.Printf("✅ 集計完了: %d 時間帯\n", len(aggregatedTimeDist))
+
+				// 時間帯順でソート
+				sortedTimeDist := aggregator.SortCommitTimeDistributionByHour(aggregatedTimeDist)
+
+				// コミット数が多い時間帯トップ5を表示
+				type hourCount struct {
+					hour  int
+					count int
+				}
+				var hourList []hourCount
+				for _, pair := range sortedTimeDist {
+					hourList = append(hourList, hourCount{hour: pair.Hour, count: pair.Count})
+				}
+
+				// コミット数でソート（降順）
+				for i := 0; i < len(hourList)-1; i++ {
+					for j := i + 1; j < len(hourList); j++ {
+						if hourList[i].count < hourList[j].count {
+							hourList[i], hourList[j] = hourList[j], hourList[i]
+						}
+					}
+				}
+
+				maxDisplay := 5
+				if len(hourList) < maxDisplay {
+					maxDisplay = len(hourList)
+				}
+				if maxDisplay > 0 {
+					fmt.Printf("\n🏆 コミットが多い時間帯（UTC、上位%d）:\n", maxDisplay)
+					for i := 0; i < maxDisplay; i++ {
+						item := hourList[i]
+						fmt.Printf("  %d. %02d時: %d コミット\n", i+1, item.hour, item.count)
+					}
+				}
+			}
+		}
+
+		fmt.Println("\n✅ コミット履歴・時間帯分布の集計テストが完了しました")
+	}
+
+	// コミットごとの言語Top5集計のテスト（最初の2件のリポジトリに対して）
+	if len(repos) > 0 {
+		fmt.Println("\n🔍 コミットごとの言語Top5を集計しています...")
+
+		// リポジトリごとのコミット言語データを格納する map
+		// map[コミットSHA]map[言語名]出現回数 の形式で統合
+		allCommitLanguages := make(map[string]map[string]int)
+
+		testCount := 2
+		if len(repos) < testCount {
+			testCount = len(repos)
+		}
+
+		// 各リポジトリのコミット言語データを取得
+		for i := 0; i < testCount; i++ {
+			repo := repos[i]
+			owner := repo.GetOwner().GetLogin()
+			repoName := repo.GetName()
+			repoKey := fmt.Sprintf("%s/%s", owner, repoName)
+
+			fmt.Printf("  [%d/%d] %s のコミット言語データを取得中...\n", i+1, testCount, repoKey)
+
+			commitLanguages, err := repository.FetchCommitLanguages(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  エラー: %v\n", err)
+				continue
+			}
+
+			if len(commitLanguages) == 0 {
+				fmt.Printf("    ℹ️  コミット言語データが見つかりませんでした\n")
+				continue
+			}
+
+			// コミットごとの言語データを統合（SHAをキーとして統合）
+			for sha, langs := range commitLanguages {
+				// SHAにリポジトリ名をプレフィックスとして付与（同じSHAが複数リポジトリにある場合を考慮）
+				uniqueSHA := fmt.Sprintf("%s:%s", repoKey, sha)
+				allCommitLanguages[uniqueSHA] = langs
+			}
+
+			fmt.Printf("    ✅ %d コミット分の言語データを取得しました\n", len(commitLanguages))
+		}
+
+		// コミットごとの言語Top5を集計
+		if len(allCommitLanguages) > 0 {
+			fmt.Printf("\n📊 コミットごとの言語Top5を集計中...\n")
+			top5Languages := aggregator.AggregateCommitLanguages(allCommitLanguages)
+
+			if len(top5Languages) > 0 {
+				fmt.Printf("✅ 集計完了: %d 言語（Top5）\n", len(top5Languages))
+
+				// 使用回数でソートして表示
+				type langCount struct {
+					lang  string
+					count int
+				}
+				var langList []langCount
+				for lang, count := range top5Languages {
+					langList = append(langList, langCount{lang: lang, count: count})
+				}
+
+				// 使用回数でソート（降順）
+				for i := 0; i < len(langList)-1; i++ {
+					for j := i + 1; j < len(langList); j++ {
+						if langList[i].count < langList[j].count {
+							langList[i], langList[j] = langList[j], langList[i]
+						}
+					}
+				}
+
+				fmt.Printf("\n🏆 コミットごとの使用言語 Top5:\n")
+				for i, item := range langList {
+					fmt.Printf("  %d. %s: %d ファイル\n", i+1, item.lang, item.count)
+				}
+			} else {
+				fmt.Println("⚠️  集計できる言語データがありませんでした")
+			}
+		} else {
+			fmt.Println("⚠️  コミット言語データがありませんでした")
+		}
+
+		fmt.Println("\n✅ コミットごとの言語Top5集計のテストが完了しました")
+	}
+
 	// コミットごとの言語使用状況の取得テスト（最初の1件のリポジトリに対して、最初の10コミットのみ）
 	if len(repos) > 0 {
 		fmt.Println("\n🔍 コミットごとの言語使用状況を取得しています...")
@@ -526,6 +730,60 @@ func main() {
 		}
 
 		fmt.Println("\n✅ プルリクエスト情報の取得テストが完了しました")
+	}
+
+	// サマリー統計集計のテスト（全リポジトリの統計を集計）
+	if len(repos) > 0 {
+		fmt.Println("\n📊 サマリー統計を集計しています...")
+
+		// 全リポジトリのコミット数とプルリクエスト数を取得
+		// 注: 実際の運用では全リポジトリを取得するが、テストでは最初の3件のみ
+		testCount := 3
+		if len(repos) < testCount {
+			testCount = len(repos)
+		}
+
+		totalCommits := 0
+		totalPRs := 0
+
+		// 各リポジトリのコミット数とプルリクエスト数を取得
+		for i := 0; i < testCount; i++ {
+			repo := repos[i]
+			owner := repo.GetOwner().GetLogin()
+			repoName := repo.GetName()
+
+			fmt.Printf("  [%d/%d] %s/%s の統計を取得中...\n", i+1, testCount, owner, repoName)
+
+			// コミット数を取得（すでに取得済みの場合は再利用できるが、今回は簡単のため再取得）
+			commits, err := repository.FetchCommits(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  コミット数取得エラー: %v\n", err)
+			} else {
+				totalCommits += len(commits)
+				fmt.Printf("    ✅ コミット数: %d\n", len(commits))
+			}
+
+			// プルリクエスト数を取得
+			prCount, err := repository.FetchPullRequests(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  プルリクエスト数取得エラー: %v\n", err)
+			} else {
+				totalPRs += prCount
+				fmt.Printf("    ✅ プルリクエスト数: %d\n", prCount)
+			}
+		}
+
+		// サマリー統計を集計
+		fmt.Printf("\n📈 サマリー統計を集計中...\n")
+		summaryStats := aggregator.AggregateSummaryStats(repos[:testCount], totalCommits, totalPRs)
+
+		fmt.Printf("\n📊 サマリー統計:\n")
+		fmt.Printf("  ⭐ 合計スター数: %d\n", summaryStats.TotalStars)
+		fmt.Printf("  📦 リポジトリ数: %d\n", summaryStats.RepositoryCount)
+		fmt.Printf("  📝 総コミット数: %d\n", summaryStats.TotalCommits)
+		fmt.Printf("  🔀 総プルリクエスト数: %d\n", summaryStats.TotalPullRequests)
+
+		fmt.Println("\n✅ サマリー統計集計のテストが完了しました")
 	}
 
 	// GitHub Actions の出力変数を設定（GITHUB_OUTPUT ファイルに書き込む）

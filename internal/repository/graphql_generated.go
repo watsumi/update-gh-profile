@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	ghgraphql "github.com/watsumi/update-gh-profile/internal/graphql"
@@ -35,52 +36,51 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 	var after *string
 
 	// 文字列ベースのクエリを使用（オプショナル変数を適切に処理するため）
-	queryStr := `
-		query ReposQuery($login: String!, $isFork: Boolean, $first: Int, $after: String) {
-			user(login: $login) {
-				repositories(isFork: $isFork, first: $first, after: $after, ownerAffiliations: OWNER) {
-					nodes {
-						name
-						owner {
-							login
-						}
-						primaryLanguage {
-							name
-						}
-						languages(first: 100) {
-							edges {
-								node {
-									name
-								}
-								size
-							}
-							totalSize
-						}
-						stargazerCount
-						defaultBranchRef {
-							target {
-								... on Commit {
-									history(first: 100) {
-										totalCount
-										nodes {
-											committedDate
-											author {
-												date
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-					pageInfo {
-						endCursor
-						hasNextPage
-					}
-				}
-			}
-		}
-	`
+	// 既存のQueryReposPerLanguageと同じ形式で統一
+	queryStr := `query ReposQuery($login: String!, $isFork: Boolean, $first: Int, $after: String) {
+  user(login: $login) {
+    repositories(isFork: $isFork, first: $first, after: $after, ownerAffiliations: OWNER) {
+      nodes {
+        name
+        owner {
+          login
+        }
+        primaryLanguage {
+          name
+        }
+        languages(first: 100) {
+          edges {
+            node {
+              name
+            }
+            size
+          }
+          totalSize
+        }
+        stargazerCount
+        defaultBranchRef {
+          target {
+            ... on Commit {
+              history(first: 100) {
+                totalCount
+                nodes {
+                  committedDate
+                  author {
+                    date
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+}`
 
 	for {
 		// 変数をmapに変換
@@ -94,10 +94,46 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 		}
 
 		// Execメソッドで文字列クエリと生成された型を組み合わせて使用
+		// Execはdataフィールドを自動unwrapするため、直接型を渡す
 		var query ghgraphql.ReposQuery
-		err = graphqlClient.Exec(ctx, queryStr, &query, variables)
-		if err != nil {
-			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+
+		// リトライロジック: 502 Bad Gatewayなどの一時的なエラーに対応
+		const maxRetries = 3
+		const retryDelay = 2 * time.Second
+		var lastErr error
+
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			if attempt > 0 {
+				// リトライ前に待機
+				select {
+				case <-ctx.Done():
+					return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
+				case <-time.After(retryDelay * time.Duration(attempt)):
+					// 指数バックオフ
+				}
+			}
+
+			err = graphqlClient.Exec(ctx, queryStr, &query, variables)
+			if err == nil {
+				break // 成功
+			}
+
+			lastErr = err
+			// 502 Bad Gateway や 503 Service Unavailable などの一時的なエラーの場合はリトライ
+			errStr := err.Error()
+			if !strings.Contains(errStr, "502") && !strings.Contains(errStr, "503") && !strings.Contains(errStr, "timeout") {
+				// 一時的なエラーでない場合は即座に返す
+				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+			}
+
+			// 最後の試行でエラーが残っている場合はログに記録
+			if attempt == maxRetries-1 {
+				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました（%d回リトライ後）: %w", maxRetries, lastErr)
+			}
+		}
+
+		if lastErr != nil {
+			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", lastErr)
 		}
 
 		// 生成された型からRepositoryGraphQLDataに変換

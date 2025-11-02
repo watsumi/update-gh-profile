@@ -22,11 +22,9 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
-      shell: bash
 
     - name: Checkout action repository
       uses: actions/checkout@v4
-      shell: bash
 
     - name: Download dependencies
       shell: bash

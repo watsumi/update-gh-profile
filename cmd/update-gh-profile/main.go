@@ -9,6 +9,7 @@ import (
 
 	"github.com/watsumi/update-gh-profile/internal/aggregator"
 	"github.com/watsumi/update-gh-profile/internal/config"
+	"github.com/watsumi/update-gh-profile/internal/generator"
 	"github.com/watsumi/update-gh-profile/internal/repository"
 
 	"github.com/google/go-github/v56/github"
@@ -272,6 +273,23 @@ func main() {
 			fmt.Printf("\n📌 閾値1%%以上: %d 言語\n", len(filtered))
 			if len(filtered) < len(rankedLanguages) {
 				fmt.Printf("  （%d 言語が除外されました）\n", len(rankedLanguages)-len(filtered))
+			}
+
+			// SVG グラフを生成
+			fmt.Printf("\n🎨 言語ランキングの SVG グラフを生成中...\n")
+			svg, err := generator.GenerateLanguageChart(rankedLanguages, 10)
+			if err != nil {
+				fmt.Printf("  ⚠️  SVG生成エラー: %v\n", err)
+			} else {
+				// SVG をファイルに保存（テスト用）
+				outputPath := "language_chart.svg"
+				err = os.WriteFile(outputPath, []byte(svg), 0644)
+				if err != nil {
+					fmt.Printf("  ⚠️  ファイル保存エラー: %v\n", err)
+				} else {
+					fmt.Printf("  ✅ SVG グラフを生成しました: %s\n", outputPath)
+					fmt.Printf("    （SVGサイズ: %d バイト）\n", len(svg))
+				}
 			}
 		} else {
 			fmt.Println("⚠️  集計できる言語データがありませんでした")

@@ -3,7 +3,7 @@ package aggregator
 import (
 	"log"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // AggregateSummaryStats サマリー統計を集計する

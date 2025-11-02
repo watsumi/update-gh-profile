@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // RateLimiter GitHub API レート制限を管理する

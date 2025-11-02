@@ -14,7 +14,7 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/readme"
 	"github.com/watsumi/update-gh-profile/internal/repository"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // Config ワークフロー設定
@@ -43,7 +43,7 @@ type Config struct {
 //
 // Invariants:
 // - エラーが発生した場合は適切に処理される
-func Run(ctx context.Context, client *github.Client, config Config) error {
+func Run(ctx context.Context, token string, config Config) error {
 	// ロガーの設定
 	if config.LogLevel != 0 {
 		logger.DefaultLogger.SetLevel(config.LogLevel)
@@ -51,100 +51,40 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 
 	logger.Info("ワークフローを開始します")
 
-	// 認証ユーザーを取得
-	authUser, _, err := client.Users.Get(ctx, "")
+	// トークンの検証（既に渡されているが念のため確認）
+	if token == "" {
+		logger.Error("GITHUB_TOKEN が設定されていません")
+		return fmt.Errorf("GITHUB_TOKEN が設定されていません")
+	}
+
+	// 認証ユーザー情報をGraphQLで取得
+	username, userID, err := repository.FetchViewer(ctx, token)
 	if err != nil {
 		logger.LogError(err, "認証ユーザー情報の取得に失敗しました")
 		return fmt.Errorf("認証ユーザー情報の取得に失敗しました: %w", err)
 	}
-	username := authUser.GetLogin()
-	logger.Info("認証ユーザー: %s", username)
+	logger.Info("認証ユーザー: %s (ID: %s)", username, userID)
 
-	// 1. リポジトリ一覧の取得
-	logger.Info("リポジトリ一覧を取得しています...")
-	fmt.Println("📦 リポジトリ一覧を取得しています...")
-	repos, err := repository.FetchUserRepositories(ctx, client, username, config.ExcludeForks, true)
+	// 1-2. GraphQLを使用してデータを一括取得・集計
+	fmt.Println("\n📊 GraphQLを使用してリポジトリデータを一括取得・集計しています...")
+	logger.Info("GraphQLを使用してデータを取得します")
+
+	languageTotals, commitHistories, timeDistributions, allCommitLanguages, totalCommits, totalPRs, repos, err := AggregateGraphQLData(
+		ctx, token, username, userID, config.ExcludeForks)
 	if err != nil {
-		logger.LogError(err, "リポジトリ一覧の取得に失敗しました")
-		return fmt.Errorf("リポジトリ一覧の取得に失敗しました: %w", err)
+		logger.LogError(err, "GraphQLデータの取得・集計に失敗しました")
+		return fmt.Errorf("GraphQLデータの取得・集計に失敗しました: %w", err)
 	}
 
-	if len(repos) == 0 {
-		logger.Warning("リポジトリが見つかりませんでした")
-		return fmt.Errorf("リポジトリが見つかりませんでした")
+	if len(languageTotals) == 0 {
+		logger.Warning("リポジトリデータが見つかりませんでした")
+		return fmt.Errorf("リポジトリデータが見つかりませんでした")
 	}
 
-	logger.Info("%d 個のリポジトリを取得しました", len(repos))
-	fmt.Printf("✅ %d 個のリポジトリを取得しました\n", len(repos))
-
-	// 最大リポジトリ数の制限
-	if config.MaxRepositories > 0 && len(repos) > config.MaxRepositories {
-		repos = repos[:config.MaxRepositories]
-		fmt.Printf("📊 最初の %d 個のリポジトリのみを処理します\n", config.MaxRepositories)
-	}
-
-	// 2. データの取得と集計（並列処理）
-	fmt.Println("\n📊 リポジトリデータを取得・集計しています...")
-	logger.Info("リポジトリを並列処理します: 総数=%d", len(repos))
-
-	// 並列処理でリポジトリデータを取得
-	maxConcurrency := 5 // 最大並列数（環境変数から設定可能にする場合の拡張ポイント）
-	repoDataList, err := ProcessRepositoriesInParallel(ctx, client, repos, maxConcurrency)
-	if err != nil {
-		logger.LogError(err, "リポジトリの並列処理に失敗しました")
-		return fmt.Errorf("リポジトリの並列処理に失敗しました: %w", err)
-	}
-
-	// 取得したデータを集計
-	languageTotals := make(map[string]int)
-	commitHistories := make(map[string]map[string]int)    // repoKey -> date -> count
-	timeDistributions := make(map[string]map[int]int)     // repoKey -> hour -> count
-	allCommitLanguages := make(map[string]map[string]int) // repoKey -> commitSHA -> languages
-	var totalCommits, totalPRs int
-
-	for _, data := range repoDataList {
-		if data == nil {
-			continue
-		}
-
-		repoKey := fmt.Sprintf("%s/%s", data.Owner, data.RepoName)
-
-		// 言語データを集計
-		for lang, bytes := range data.Languages {
-			languageTotals[lang] += bytes
-		}
-
-		// コミット履歴を集計
-		if len(data.CommitHistory) > 0 {
-			commitHistories[repoKey] = data.CommitHistory
-			logger.Debug("%s: %d 日分のコミット履歴を取得しました", repoKey, len(data.CommitHistory))
-		}
-
-		// コミット時間帯を集計
-		if len(data.TimeDistribution) > 0 {
-			timeDistributions[repoKey] = data.TimeDistribution
-		}
-
-		// コミット数を集計
-		totalCommits += data.CommitCount
-		if data.CommitCount > 0 {
-			logger.Debug("%s: %d コミットを取得しました", repoKey, data.CommitCount)
-		}
-
-		// コミットごとの言語を集計
-		if len(data.CommitLanguages) > 0 {
-			for sha, langs := range data.CommitLanguages {
-				uniqueSHA := fmt.Sprintf("%s:%s", repoKey, sha)
-				allCommitLanguages[uniqueSHA] = langs
-			}
-		}
-
-		// プルリクエスト数を集計
-		totalPRs += data.PRCount
-		if data.PRCount > 0 {
-			logger.Debug("%s: %d プルリクエストを取得しました", repoKey, data.PRCount)
-		}
-	}
+	logger.Info("GraphQLデータの取得が完了しました: 言語数=%d, コミット履歴数=%d, 総コミット数=%d, 総PR数=%d",
+		len(languageTotals), len(commitHistories), totalCommits, totalPRs)
+	fmt.Printf("✅ GraphQLでデータを取得しました（言語: %d種類, コミット履歴: %dリポジトリ）\n",
+		len(languageTotals), len(commitHistories))
 
 	// 3. データの集計とランキング生成
 	fmt.Println("\n📈 データを集計・ランキング生成中...")
@@ -172,7 +112,11 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 	top5Languages := aggregator.AggregateCommitLanguages(allCommitLanguages)
 
 	// サマリー統計
-	summaryStats := aggregator.AggregateSummaryStats(repos, totalCommits, totalPRs)
+	var reposForSummary []*github.Repository
+	if len(repos) > 0 {
+		reposForSummary = repos
+	}
+	summaryStats := aggregator.AggregateSummaryStats(reposForSummary, totalCommits, totalPRs)
 
 	// 4. SVG グラフの生成
 	fmt.Println("\n🎨 SVG グラフを生成しています...")

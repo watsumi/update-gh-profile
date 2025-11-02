@@ -3,7 +3,7 @@ package aggregator
 import (
 	"testing"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 func TestAggregateSummaryStats(t *testing.T) {

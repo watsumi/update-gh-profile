@@ -5,7 +5,7 @@ import (
 	"log"
 	"sort"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // AggregateLanguages 全リポジトリの言語データを集計する

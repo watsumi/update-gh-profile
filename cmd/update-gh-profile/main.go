@@ -10,9 +10,6 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/config"
 	"github.com/watsumi/update-gh-profile/internal/logger"
 	"github.com/watsumi/update-gh-profile/internal/workflow"
-
-	"github.com/google/go-github/v56/github"
-	"golang.org/x/oauth2"
 )
 
 func main() {
@@ -40,42 +37,16 @@ func main() {
 
 	fmt.Println("✓ GITHUB_TOKEN が設定されています")
 
-	// GitHub API クライアントの初期化
+	// コンテキストの作成
 	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: cfg.GitHubToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
 
-	// 認証ユーザーを取得（必須）
-	authUser, _, err := client.Users.Get(ctx, "")
-	if err != nil {
-		fmt.Printf("エラー: 認証ユーザー情報の取得に失敗しました: %v\n", err)
-		os.Exit(1)
-	}
-	authenticatedUsername := authUser.GetLogin()
-
+	// 認証ユーザーの検証はGraphQLで行うため、ここではスキップ
 	// 対象ユーザー名の決定（優先順位: コマンドライン引数 > 環境変数 > 認証ユーザー）
 	targetUser := *usernameFlag
 	if targetUser == "" {
 		targetUser = cfg.GetTargetUser()
-		if targetUser == "" {
-			// 認証ユーザーを使用（デフォルト）
-			targetUser = authenticatedUsername
-		}
+		// 空の場合は認証ユーザーを使用（GraphQLで取得）
 	}
-
-	// 認証ユーザー以外を指定した場合はエラー
-	if targetUser != authenticatedUsername {
-		fmt.Printf("エラー: 認証ユーザー（%s）以外のリポジトリを取得することはできません\n", authenticatedUsername)
-		fmt.Printf("指定されたユーザー: %s\n", targetUser)
-		fmt.Println("\nこのツールは認証ユーザー自身のリポジトリのみを取得できます。")
-		os.Exit(1)
-	}
-
-	// 認証ユーザー自身であることを確認
-	fmt.Printf("✓ 認証ユーザー: %s（プライベートリポジトリも取得します）\n", targetUser)
 
 	// フォーク除外の設定
 	excludeForks, err := strconv.ParseBool(*excludeForksStr)
@@ -107,7 +78,7 @@ func main() {
 
 	// ワークフローを実行
 	fmt.Println("\n🚀 メインワークフローを開始します...")
-	err = workflow.Run(ctx, client, workflowConfig)
+	err = workflow.Run(ctx, cfg.GitHubToken, workflowConfig)
 	if err != nil {
 		fmt.Printf("エラー: ワークフローの実行に失敗しました: %v\n", err)
 		os.Exit(1)

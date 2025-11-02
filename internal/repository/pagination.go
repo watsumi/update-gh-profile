@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // PaginationResult ページネーションの結果を表す構造体

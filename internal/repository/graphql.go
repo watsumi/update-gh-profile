@@ -1,0 +1,512 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/hasura/go-graphql-client"
+	"golang.org/x/oauth2"
+)
+
+// GraphQLQueries GraphQLクエリ定義
+var (
+	// QueryReposPerLanguage リポジトリごとの言語情報を取得するクエリ
+	QueryReposPerLanguage = `
+query ReposPerLanguage($login: String!, $endCursor: String) {
+  user(login: $login) {
+    repositories(isFork: false, first: 100, after: $endCursor, ownerAffiliations: OWNER) {
+      nodes {
+        name
+        owner {
+          login
+        }
+        primaryLanguage {
+          name
+        }
+        languages(first: 100) {
+          nodes {
+            name
+            size
+          }
+          totalSize
+        }
+        stargazerCount
+        defaultBranchRef {
+          target {
+            ... on Commit {
+              history(first: 100) {
+                totalCount
+                nodes {
+                  committedDate
+                  author {
+                    date
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+}`
+
+	// QueryUserDetails ユーザーの詳細情報を取得するクエリ
+	QueryUserDetails = `
+query UserDetails($login: String!) {
+  user(login: $login) {
+    id
+    name
+    email
+    createdAt
+    repositories(first: 100, privacy: PUBLIC, isFork: false, ownerAffiliations: OWNER, orderBy: {direction: DESC, field: STARGAZERS}) {
+      totalCount
+      nodes {
+        stargazerCount
+        defaultBranchRef {
+          target {
+            ... on Commit {
+              history(first: 1) {
+                totalCount
+              }
+            }
+          }
+        }
+      }
+    }
+    contributionsCollection {
+      contributionCalendar {
+        weeks {
+          contributionDays {
+            contributionCount
+            date
+          }
+        }
+      }
+    }
+    pullRequests(first: 1) {
+      totalCount
+    }
+    issues(first: 1) {
+      totalCount
+    }
+  }
+}`
+
+	// QueryCommitLanguages コミットごとの言語使用状況を取得するクエリ
+	QueryCommitLanguages = `
+query CommitLanguages($login: String!) {
+  user(login: $login) {
+    contributionsCollection {
+      commitContributionsByRepository(maxRepositories: 100) {
+        repository {
+          name
+          owner {
+            login
+          }
+          primaryLanguage {
+            name
+            color
+          }
+          defaultBranchRef {
+            target {
+              ... on Commit {
+                history(first: 50) {
+                  edges {
+                    node {
+                      message
+                      committedDate
+                      additions
+                      deletions
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        contributions {
+          totalCount
+        }
+      }
+    }
+  }
+}`
+
+	// QueryProductiveTime コミット時間帯を取得するクエリ
+	QueryProductiveTime = `
+query ProductiveTime($login: String!, $userId: ID!, $since: GitTimestamp!, $until: GitTimestamp!) {
+  user(login: $login) {
+    contributionsCollection {
+      commitContributionsByRepository(maxRepositories: 50) {
+        repository {
+          name
+          owner {
+            login
+          }
+          defaultBranchRef {
+            target {
+              ... on Commit {
+                history(first: 50, since: $since, until: $until, author: {id: $userId}) {
+                  edges {
+                    node {
+                      message
+                      author {
+                        email
+                      }
+                      committedDate
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`
+
+	// QueryViewer 認証ユーザー情報を取得するクエリ
+	QueryViewer = `
+query Viewer {
+  viewer {
+    login
+    id
+    name
+    email
+  }
+}`
+)
+
+// newGraphQLClient GraphQLクライアントを作成する
+func newGraphQLClient(ctx context.Context, token string) (*graphql.Client, error) {
+	if token == "" {
+		return nil, fmt.Errorf("認証トークンが設定されていません")
+	}
+
+	// OAuth2トークンを使用してHTTPクライアントを作成
+	httpClient := oauth2.NewClient(ctx, oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: token},
+	))
+
+	// GraphQLクライアントを作成
+	graphqlClient := graphql.NewClient("https://api.github.com/graphql", httpClient)
+
+	return graphqlClient, nil
+}
+
+// FetchViewer GraphQLを使用して認証ユーザー情報を取得する
+func FetchViewer(ctx context.Context, token string) (string, string, error) {
+	graphqlClient, err := newGraphQLClient(ctx, token)
+	if err != nil {
+		return "", "", fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+	}
+
+	variables := map[string]interface{}{}
+
+	var response struct {
+		Data struct {
+			Viewer struct {
+				Login string `json:"login"`
+				ID    string `json:"id"`
+			} `json:"viewer"`
+		} `json:"data"`
+	}
+
+	err = graphqlClient.Exec(ctx, QueryViewer, &response, variables)
+	if err != nil {
+		return "", "", fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+	}
+
+	return response.Data.Viewer.Login, response.Data.Viewer.ID, nil
+}
+
+// FetchRepositoriesWithGraphQL GraphQLを使用してリポジトリ情報を一括取得する
+func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username string, excludeForks bool) ([]*RepositoryGraphQLData, error) {
+	graphqlClient, err := newGraphQLClient(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+	}
+
+	var allRepos []*RepositoryGraphQLData
+	var endCursor *string
+
+	for {
+		// GraphQLクエリの変数を準備
+		variables := map[string]interface{}{
+			"login": username,
+		}
+		if endCursor != nil {
+			variables["endCursor"] = *endCursor
+		}
+
+		// GraphQLクエリを実行（文字列クエリを使用）
+		var response struct {
+			Data struct {
+				User struct {
+					Repositories struct {
+						Nodes    []*RepositoryGraphQLData `json:"nodes"`
+						PageInfo struct {
+							EndCursor   string `json:"endCursor"`
+							HasNextPage bool   `json:"hasNextPage"`
+						} `json:"pageInfo"`
+					} `json:"repositories"`
+				} `json:"user"`
+			} `json:"data"`
+		}
+
+		// Execを使用してクエリを実行
+		err := graphqlClient.Exec(ctx, QueryReposPerLanguage, &response, variables)
+		if err != nil {
+			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		}
+
+		allRepos = append(allRepos, response.Data.User.Repositories.Nodes...)
+
+		if !response.Data.User.Repositories.PageInfo.HasNextPage {
+			break
+		}
+		endCursor = &response.Data.User.Repositories.PageInfo.EndCursor
+	}
+
+	return allRepos, nil
+}
+
+// RepositoryGraphQLData GraphQLから取得したリポジトリデータ
+type RepositoryGraphQLData struct {
+	Name            string    `json:"name"`
+	Owner           OwnerData `json:"owner"`
+	PrimaryLanguage struct {
+		Name string `json:"name"`
+	} `json:"primaryLanguage"`
+	Languages struct {
+		Nodes []struct {
+			Name string `json:"name"`
+			Size int    `json:"size"`
+		} `json:"nodes"`
+		TotalSize int `json:"totalSize"`
+	} `json:"languages"`
+	StargazerCount   int `json:"stargazerCount"`
+	DefaultBranchRef struct {
+		Target struct {
+			History struct {
+				TotalCount int `json:"totalCount"`
+				Nodes      []struct {
+					CommittedDate string `json:"committedDate"`
+					Author        struct {
+						Date string `json:"date"`
+					} `json:"author"`
+				} `json:"nodes"`
+			} `json:"history"`
+		} `json:"target"`
+	} `json:"defaultBranchRef"`
+}
+
+// OwnerData オーナー情報
+type OwnerData struct {
+	Login string `json:"login"`
+}
+
+// FetchUserDetailsWithGraphQL GraphQLを使用してユーザー詳細情報を取得する
+func FetchUserDetailsWithGraphQL(ctx context.Context, token string, username string) (*UserDetailsGraphQLData, error) {
+	graphqlClient, err := newGraphQLClient(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+	}
+
+	variables := map[string]interface{}{
+		"login": username,
+	}
+
+	var response struct {
+		Data struct {
+			User UserDetailsGraphQLData `json:"user"`
+		} `json:"data"`
+	}
+
+	err = graphqlClient.Exec(ctx, QueryUserDetails, &response, variables)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+	}
+
+	return &response.Data.User, nil
+}
+
+// UserDetailsGraphQLData GraphQLから取得したユーザー詳細データ
+type UserDetailsGraphQLData struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	CreatedAt    string `json:"createdAt"`
+	Repositories struct {
+		TotalCount int `json:"totalCount"`
+		Nodes      []struct {
+			StargazerCount   int `json:"stargazerCount"`
+			DefaultBranchRef struct {
+				Target struct {
+					History struct {
+						TotalCount int `json:"totalCount"`
+					} `json:"history"`
+				} `json:"target"`
+			} `json:"defaultBranchRef"`
+		} `json:"nodes"`
+	} `json:"repositories"`
+	ContributionsCollection struct {
+		ContributionCalendar struct {
+			Weeks []struct {
+				ContributionDays []struct {
+					ContributionCount int    `json:"contributionCount"`
+					Date              string `json:"date"`
+				} `json:"contributionDays"`
+			} `json:"weeks"`
+		} `json:"contributionCalendar"`
+	} `json:"contributionsCollection"`
+	PullRequests struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"pullRequests"`
+	Issues struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"issues"`
+}
+
+// FetchCommitLanguagesWithGraphQL GraphQLを使用してコミットごとの言語使用状況を取得する
+func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username string) (map[string]map[string]int, error) {
+	graphqlClient, err := newGraphQLClient(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+	}
+
+	variables := map[string]interface{}{
+		"login": username,
+	}
+
+	var response struct {
+		Data struct {
+			User struct {
+				ContributionsCollection struct {
+					CommitContributionsByRepository []struct {
+						Repository struct {
+							Name            string    `json:"name"`
+							Owner           OwnerData `json:"owner"`
+							PrimaryLanguage struct {
+								Name string `json:"name"`
+							} `json:"primaryLanguage"`
+							DefaultBranchRef struct {
+								Target struct {
+									History struct {
+										Edges []struct {
+											Node struct {
+												Message       string `json:"message"`
+												CommittedDate string `json:"committedDate"`
+												Additions     int    `json:"additions"`
+												Deletions     int    `json:"deletions"`
+											} `json:"node"`
+										} `json:"edges"`
+									} `json:"history"`
+								} `json:"target"`
+							} `json:"defaultBranchRef"`
+						} `json:"repository"`
+						Contributions struct {
+							TotalCount int `json:"totalCount"`
+						} `json:"contributions"`
+					} `json:"commitContributionsByRepository"`
+				} `json:"contributionsCollection"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+
+	err = graphqlClient.Exec(ctx, QueryCommitLanguages, &response, variables)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+	}
+
+	// データを変換
+	commitLanguages := make(map[string]map[string]int)
+	for _, repoContrib := range response.Data.User.ContributionsCollection.CommitContributionsByRepository {
+		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {
+			// コミットSHAの代わりに日時を使用（簡易版）
+			commitKey := edge.Node.CommittedDate
+			if commitKey == "" {
+				continue
+			}
+
+			if commitLanguages[commitKey] == nil {
+				commitLanguages[commitKey] = make(map[string]int)
+			}
+
+			// プライマリ言語を使用
+			if repoContrib.Repository.PrimaryLanguage.Name != "" {
+				commitLanguages[commitKey][repoContrib.Repository.PrimaryLanguage.Name]++
+			}
+		}
+	}
+
+	return commitLanguages, nil
+}
+
+// FetchProductiveTimeWithGraphQL GraphQLを使用してコミット時間帯を取得する
+func FetchProductiveTimeWithGraphQL(ctx context.Context, token string, username, userID string, since, until time.Time) (map[int]int, error) {
+	graphqlClient, err := newGraphQLClient(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+	}
+
+	variables := map[string]interface{}{
+		"login":  username,
+		"userId": userID,
+		"since":  since.Format(time.RFC3339),
+		"until":  until.Format(time.RFC3339),
+	}
+
+	var response struct {
+		Data struct {
+			User struct {
+				ContributionsCollection struct {
+					CommitContributionsByRepository []struct {
+						Repository struct {
+							Name             string    `json:"name"`
+							Owner            OwnerData `json:"owner"`
+							DefaultBranchRef struct {
+								Target struct {
+									History struct {
+										Edges []struct {
+											Node struct {
+												CommittedDate string `json:"committedDate"`
+											} `json:"node"`
+										} `json:"edges"`
+									} `json:"history"`
+								} `json:"target"`
+							} `json:"defaultBranchRef"`
+						} `json:"repository"`
+					} `json:"commitContributionsByRepository"`
+				} `json:"contributionsCollection"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+
+	err = graphqlClient.Exec(ctx, QueryProductiveTime, &response, variables)
+	if err != nil {
+		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+	}
+
+	// 時間帯ごとのコミット数を集計
+	timeDistribution := make(map[int]int)
+	for _, repoContrib := range response.Data.User.ContributionsCollection.CommitContributionsByRepository {
+		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {
+			committedDate, err := time.Parse(time.RFC3339, edge.Node.CommittedDate)
+			if err != nil {
+				continue
+			}
+			hour := committedDate.UTC().Hour()
+			timeDistribution[hour]++
+		}
+	}
+
+	return timeDistribution, nil
+}

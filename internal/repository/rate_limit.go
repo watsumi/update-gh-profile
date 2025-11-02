@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // HandleRateLimit API レート制限を検出し、適切に待機する

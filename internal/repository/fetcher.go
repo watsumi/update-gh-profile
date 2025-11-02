@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // FetchUserRepositories GitHub API を使用して認証ユーザーのリポジトリ一覧を取得する

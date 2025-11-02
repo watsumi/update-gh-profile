@@ -9,7 +9,7 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/logger"
 	"github.com/watsumi/update-gh-profile/internal/repository"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // RepoData リポジトリから取得したデータ

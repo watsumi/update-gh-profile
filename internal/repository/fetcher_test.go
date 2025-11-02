@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v76/github"
 )
 
 // TestFetchUserRepositories_InvalidUsername は、無効なユーザー名でエラーが返されることを確認する

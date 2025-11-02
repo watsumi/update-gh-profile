@@ -18,16 +18,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout action repository
-      uses: actions/checkout@v4
-
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version-file: go.mod
+        go-version-file: ${{ github.action_path }}/go.mod
 
     - name: Download dependencies
       shell: bash
+      working-directory: ${{ github.action_path }}
       run: |
         go mod download
 
@@ -35,6 +33,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN }}
       shell: bash
+      working-directory: ${{ github.action_path }}
       run: |
         echo "::group::リポジトリ一覧を取得"
         export GITHUB_TOKEN="${{ inputs.github_token || env.GITHUB_TOKEN }}"

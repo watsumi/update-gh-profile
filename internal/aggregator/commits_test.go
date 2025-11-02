@@ -6,10 +6,10 @@ import (
 
 func TestAggregateCommitHistory(t *testing.T) {
 	tests := []struct {
-		name           string
+		name            string
 		commitHistories map[string]map[string]int
-		wantDates      int
-		wantTotal      int
+		wantDates       int
+		wantTotal       int
 	}{
 		{
 			name: "正常系: 複数リポジトリ",
@@ -23,14 +23,14 @@ func TestAggregateCommitHistory(t *testing.T) {
 					"2024-01-03": 4,
 				},
 			},
-			wantDates: 3, // 2024-01-01, 2024-01-02, 2024-01-03
+			wantDates: 3,  // 2024-01-01, 2024-01-02, 2024-01-03
 			wantTotal: 14, // 5 + 3 + 2 + 4
 		},
 		{
-			name: "空のmap",
+			name:            "空のmap",
 			commitHistories: map[string]map[string]int{},
-			wantDates: 0,
-			wantTotal: 0,
+			wantDates:       0,
+			wantTotal:       0,
 		},
 		{
 			name: "単一リポジトリ",
@@ -109,10 +109,10 @@ func TestSortCommitHistoryByDate(t *testing.T) {
 
 func TestAggregateCommitTimeDistribution(t *testing.T) {
 	tests := []struct {
-		name             string
+		name              string
 		timeDistributions map[string]map[int]int
-		wantHours        int
-		wantTotal        int
+		wantHours         int
+		wantTotal         int
 	}{
 		{
 			name: "正常系: 複数リポジトリ",
@@ -126,14 +126,14 @@ func TestAggregateCommitTimeDistribution(t *testing.T) {
 					14: 4, // 14時
 				},
 			},
-			wantHours: 3, // 9時, 10時, 14時
+			wantHours: 3,  // 9時, 10時, 14時
 			wantTotal: 14, // 5 + 3 + 2 + 4
 		},
 		{
-			name: "空のmap",
+			name:              "空のmap",
 			timeDistributions: map[string]map[int]int{},
-			wantHours: 0,
-			wantTotal: 0,
+			wantHours:         0,
+			wantTotal:         0,
 		},
 		{
 			name: "同じ時間帯のコミットを複数リポジトリから集計",

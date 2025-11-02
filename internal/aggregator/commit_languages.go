@@ -8,8 +8,8 @@ import (
 // AggregateCommitLanguages コミットごとの使用言語Top5を集計する
 //
 // Preconditions:
-// - commitLanguages が map[string]map[string]map[string]int{リポジトリ名: {コミットSHA: {言語名: 出現回数}}} の形式であること
-//   または map[string]map[string]int{コミットSHA: {言語名: 出現回数}} の形式であること
+//   - commitLanguages が map[string]map[string]map[string]int{リポジトリ名: {コミットSHA: {言語名: 出現回数}}} の形式であること
+//     または map[string]map[string]int{コミットSHA: {言語名: 出現回数}} の形式であること
 //
 // Postconditions:
 // - 返される map は map[string]int{言語名: 使用回数} の形式で、Top5のみを含む

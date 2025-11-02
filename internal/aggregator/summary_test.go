@@ -44,7 +44,7 @@ func TestAggregateSummaryStats(t *testing.T) {
 			wantPRs:      50,
 		},
 		{
-			name: "空のリポジトリリスト",
+			name:         "空のリポジトリリスト",
 			repositories: []*github.Repository{},
 			totalCommits: 0,
 			totalPRs:     0,

@@ -111,39 +111,39 @@ func TestGenerateLanguageChart(t *testing.T) {
 
 func TestEscapeXML(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        string
-		wantContains []string
+		name            string
+		input           string
+		wantContains    []string
 		wantNotContains []string
 	}{
 		{
-			name:  "アンパサンド",
-			input: "Go & Python",
-			wantContains: []string{"Go", "&amp;", "Python"}, // &amp;が含まれていることを確認
+			name:            "アンパサンド",
+			input:           "Go & Python",
+			wantContains:    []string{"Go", "&amp;", "Python"}, // &amp;が含まれていることを確認
 			wantNotContains: []string{},
 		},
 		{
-			name:  "不等号",
-			input: "A < B > C",
-			wantContains: []string{"&lt;", "&gt;"},
+			name:            "不等号",
+			input:           "A < B > C",
+			wantContains:    []string{"&lt;", "&gt;"},
 			wantNotContains: []string{"<", ">"}, // エスケープされていない < と > が含まれていないこと
 		},
 		{
-			name:  "引用符",
-			input: `"Hello"`,
-			wantContains: []string{"&quot;"},
+			name:            "引用符",
+			input:           `"Hello"`,
+			wantContains:    []string{"&quot;"},
 			wantNotContains: []string{`"`}, // エスケープされていない " が含まれていないこと
 		},
 		{
-			name:  "通常の文字",
-			input: "Go",
-			wantContains: []string{"Go"},
+			name:            "通常の文字",
+			input:           "Go",
+			wantContains:    []string{"Go"},
 			wantNotContains: []string{},
 		},
 		{
-			name:  "C++（特殊文字なし）",
-			input: "C++",
-			wantContains: []string{"C++"},
+			name:            "C++（特殊文字なし）",
+			input:           "C++",
+			wantContains:    []string{"C++"},
 			wantNotContains: []string{},
 		},
 	}
@@ -151,7 +151,7 @@ func TestEscapeXML(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			escaped := escapeXML(tt.input)
-			
+
 			// 期待されるエスケープシーケンスが含まれていることを確認
 			for _, want := range tt.wantContains {
 				if !strings.Contains(escaped, want) {

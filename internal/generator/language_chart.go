@@ -100,7 +100,7 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 
 		// パーセンテージ（バーの右側）
 		percentageText := fmt.Sprintf("%.1f%%", lang.Percentage)
-		textX := barX + (width-150) + 10
+		textX := barX + (width - 150) + 10
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="12" fill="%s">%s</text>
 `, textX, yPos, DefaultTextColor, percentageText))
 

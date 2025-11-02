@@ -6,25 +6,25 @@ import (
 
 func TestRankLanguages(t *testing.T) {
 	tests := []struct {
-		name          string
+		name           string
 		languageTotals map[string]int
-		wantCount     int
-		wantFirst     string
+		wantCount      int
+		wantFirst      string
 	}{
 		{
 			name: "正常系: 複数言語",
 			languageTotals: map[string]int{
-				"Go":      1000,
-				"Python":  500,
+				"Go":         1000,
+				"Python":     500,
 				"JavaScript": 200,
 			},
 			wantCount: 3,
 			wantFirst: "Go",
 		},
 		{
-			name:          "空のmap",
+			name:           "空のmap",
 			languageTotals: map[string]int{},
-			wantCount:     0,
+			wantCount:      0,
 		},
 		{
 			name: "単一言語",

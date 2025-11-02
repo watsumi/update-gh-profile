@@ -72,9 +72,9 @@ func TestValidateOwnerAndRepo(t *testing.T) {
 // TestValidateUsername は、username の検証を確認する
 func TestValidateUsername(t *testing.T) {
 	tests := []struct {
-		name    string
+		name     string
 		username string
-		wantErr bool
+		wantErr  bool
 	}{
 		{"valid", "username", false},
 		{"empty", "", true},

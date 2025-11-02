@@ -92,9 +92,9 @@ func RankLanguages(languageTotals map[string]int) []LanguageStat {
 	for lang, bytes := range languageTotals {
 		percentage := float64(bytes) / float64(totalBytes) * 100.0
 		ranked = append(ranked, LanguageStat{
-			Language:    lang,
-			Bytes:       bytes,
-			Percentage:  percentage,
+			Language:   lang,
+			Bytes:      bytes,
+			Percentage: percentage,
 		})
 	}
 

@@ -15,19 +15,19 @@ func TestAggregateCommitLanguages(t *testing.T) {
 			name: "正常系: 複数言語、複数コミット",
 			commitLanguages: map[string]map[string]int{
 				"sha1": {
-					"Go":       5,
-					"Python":   3,
+					"Go":         5,
+					"Python":     3,
 					"JavaScript": 2,
 				},
 				"sha2": {
-					"Go":       3,
+					"Go":         3,
 					"TypeScript": 4,
-					"Python":   2,
+					"Python":     2,
 				},
 				"sha3": {
-					"Rust":     2,
-					"Go":       1,
-					"Python":   1,
+					"Rust":   2,
+					"Go":     1,
+					"Python": 1,
 				},
 			},
 			wantCount: 5,

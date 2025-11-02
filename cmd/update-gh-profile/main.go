@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/watsumi/update-gh-profile/internal/config"
 	"github.com/watsumi/update-gh-profile/internal/repository"
@@ -13,20 +15,23 @@ import (
 )
 
 func main() {
+	// コマンドライン引数のパース
+	var (
+		usernameFlag    = flag.String("username", "", "GitHub ユーザー名（省略時は環境変数 GITHUB_USERNAME または認証ユーザー）")
+		excludeForksStr = flag.String("exclude-forks", "true", "フォークリポジトリを除外するか（true/false）")
+	)
+	flag.Parse()
+
 	fmt.Println("update-gh-profile: GitHub プロフィール自動更新ツール")
 	fmt.Println("初期化完了")
 
 	// 設定を読み込む
-	// config.Load() は *Config と error を返します
 	cfg, err := config.Load()
 	if err != nil {
-		// エラーハンドリング: エラーが発生した場合は処理を中断
 		fmt.Printf("エラー: 設定の読み込みに失敗しました: %v\n", err)
 		os.Exit(1)
 	}
 
-	// 設定値の検証
-	// Validate() メソッドを呼び出して、設定が正しいか確認
 	if err := cfg.Validate(); err != nil {
 		fmt.Printf("エラー: 設定の検証に失敗しました: %v\n", err)
 		os.Exit(1)
@@ -42,26 +47,37 @@ func main() {
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
 
-	// 対象ユーザー名の取得
-	targetUser := cfg.GetTargetUser()
+	// 対象ユーザー名の決定（優先順位: コマンドライン引数 > 環境変数 > 認証ユーザー）
+	targetUser := *usernameFlag
 	if targetUser == "" {
-		// デフォルトでは認証ユーザーを取得
-		user, _, err := client.Users.Get(ctx, "")
-		if err != nil {
-			fmt.Printf("エラー: ユーザー情報の取得に失敗しました: %v\n", err)
-			os.Exit(1)
+		targetUser = cfg.GetTargetUser()
+		if targetUser == "" {
+			user, _, err := client.Users.Get(ctx, "")
+			if err != nil {
+				fmt.Printf("エラー: ユーザー情報の取得に失敗しました: %v\n", err)
+				os.Exit(1)
+			}
+			targetUser = user.GetLogin()
+			fmt.Printf("✓ 認証ユーザー: %s\n", targetUser)
+		} else {
+			fmt.Printf("✓ 対象ユーザー（環境変数）: %s\n", targetUser)
 		}
-		targetUser = user.GetLogin()
-		fmt.Printf("✓ 認証ユーザー: %s\n", targetUser)
 	} else {
-		fmt.Printf("✓ 対象ユーザー: %s\n", targetUser)
+		fmt.Printf("✓ 対象ユーザー（コマンドライン）: %s\n", targetUser)
+	}
+
+	// フォーク除外の設定
+	excludeForks, err := strconv.ParseBool(*excludeForksStr)
+	if err != nil {
+		fmt.Printf("警告: exclude-forks の値が不正です（%s）。デフォルト値 true を使用します\n", *excludeForksStr)
+		excludeForks = true
 	}
 
 	fmt.Println("\n✅ GitHub API クライアントの初期化に成功しました！")
 
 	// リポジトリ一覧の取得
 	fmt.Println("\n📦 リポジトリ一覧を取得しています...")
-	repos, err := repository.FetchUserRepositories(ctx, client, targetUser, true) // excludeForks=true
+	repos, err := repository.FetchUserRepositories(ctx, client, targetUser, excludeForks)
 	if err != nil {
 		fmt.Printf("エラー: リポジトリ一覧の取得に失敗しました: %v\n", err)
 		os.Exit(1)
@@ -84,5 +100,14 @@ func main() {
 	}
 	if len(repos) > maxDisplay {
 		fmt.Printf("  ... 他 %d 件\n", len(repos)-maxDisplay)
+	}
+
+	// GitHub Actions の出力変数を設定（GITHUB_OUTPUT ファイルに書き込む）
+	if outputFile := os.Getenv("GITHUB_OUTPUT"); outputFile != "" {
+		file, err := os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			fmt.Fprintf(file, "repository_count=%d\n", len(repos))
+			file.Close()
+		}
 	}
 }

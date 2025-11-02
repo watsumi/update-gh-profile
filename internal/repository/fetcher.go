@@ -9,6 +9,12 @@ import (
 	"github.com/google/go-github/v56/github"
 )
 
+const (
+	// maxPages 最大ページ数（無限ループを防ぐため）
+	// GitHub API の制限: per_page=100 の場合、100ページで最大10,000リポジトリ
+	maxPages = 100
+)
+
 // FetchUserRepositories GitHub API を使用して認証ユーザーのリポジトリ一覧を取得する
 //
 // Preconditions:
@@ -37,18 +43,28 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 
 	// ページネーション用のオプション
 	// Type: "all" を指定することで、プライベートリポジトリも含めて取得
+	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
 	opt := &github.RepositoryListOptions{
-		Type:        "all", // all, owner, member から選択（認証ユーザーの場合は all でプライベートも取得可能）
-		Sort:        "updated",
-		Direction:   "desc",
-		ListOptions: github.ListOptions{PerPage: 100}, // 1ページあたりの最大件数
+		Type:      "all", // all, owner, member から選択（認証ユーザーの場合は all でプライベートも取得可能）
+		Sort:      "updated",
+		Direction: "desc",
+		ListOptions: github.ListOptions{
+			PerPage: 100, // 1ページあたりの最大件数（GitHub APIの最大値）
+			Page:    0,   // 最初のページ（0から開始、または1から開始）
+		},
 	}
 
 	var allRepos []*github.Repository
 
 	// ページネーションループ: 全ページを取得するまで繰り返す
 	// username を空文字列にすると、認証ユーザー自身のリポジトリ（プライベート含む）を取得
-	for {
+	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
+	for pageNum := 1; pageNum <= maxPages; pageNum++ {
+		// ページ番号を設定（GitHub APIは1から開始）
+		if pageNum > 1 {
+			opt.Page = pageNum
+		}
+
 		repos, resp, err := client.Repositories.List(ctx, "", opt)
 
 		if err != nil {
@@ -65,18 +81,50 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 
 		// デバッグ: ページネーション情報をログに出力
 		log.Printf("取得したリポジトリ数: %d (累計: %d)", len(repos), len(allRepos))
-		log.Printf("ページネーション情報: 現在ページ=%d, 次ページ=%d, 最終ページ=%d",
-			opt.Page, resp.NextPage, resp.LastPage)
+		log.Printf("ページネーション情報: 現在ページ=%d (手動=%d), 次ページ=%d, 最終ページ=%d, PerPage=%d",
+			opt.Page, pageNum, resp.NextPage, resp.LastPage, opt.PerPage)
 
 		// 次のページがあるか確認
-		if resp.NextPage == 0 {
-			log.Printf("次のページがないため、ページネーションを終了します")
+		// 1. resp.NextPage が 0 でない場合は、GitHub API のレスポンスヘッダーから取得した情報を使用
+		// 2. resp.NextPage が 0 の場合でも、取得した件数が PerPage に達している場合は次のページがある可能性がある
+		// 3. 取得した件数が30件（GitHub APIのデフォルト）の場合は、次のページがある可能性がある
+		// 4. 取得した件数が 0 の場合は、次のページがないと判断
+		hasNextPage := false
+		if resp.NextPage != 0 {
+			hasNextPage = true
+			log.Printf("レスポンスヘッダーから次ページ (%d) を検出", resp.NextPage)
+		} else if len(repos) >= opt.PerPage {
+			// NextPage が 0 でも、取得した件数が PerPage に達している場合は次のページを試みる
+			hasNextPage = true
+			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数 (%d) が PerPage (%d) に達しているため、次のページを試みます", len(repos), opt.PerPage)
+		} else if len(repos) == 30 {
+			// GitHub APIのデフォルトのページサイズは30件
+			// 30件取得できている場合は、PerPageパラメータが無視されている可能性がある
+			// 次のページを試みる
+			hasNextPage = true
+			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数が30件（GitHub APIのデフォルト）のため、次のページを試みます")
+		} else if len(repos) == 0 {
+			// 0件取得した場合は終了
+			log.Printf("0件取得したため、ページネーションを終了します")
+			break
+		}
+
+		if !hasNextPage {
+			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d, PerPage: %d）", len(repos), opt.PerPage)
 			break // 次のページがない場合は終了
 		}
 
-		// 次のページを取得するためにページ番号を更新
-		opt.Page = resp.NextPage
-		log.Printf("次のページ (%d) を取得します...", resp.NextPage)
+		// 最大ページ数チェック（次のページに進む前に確認）
+		if pageNum >= maxPages {
+			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", maxPages, len(allRepos))
+			break
+		}
+
+		// 次のページ番号を決定
+		if resp.NextPage != 0 {
+			pageNum = resp.NextPage - 1 // pageNum はループでインクリメントされるため -1
+		}
+		log.Printf("次のページを取得します（ページ番号: %d / 最大: %d）...", pageNum+1, maxPages)
 	}
 
 	log.Printf("全リポジトリ取得完了: %d 件", len(allRepos))

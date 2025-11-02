@@ -180,6 +180,168 @@ func FetchRepositoryLanguages(ctx context.Context, client *github.Client, owner,
 	return languages, nil
 }
 
+// FetchCommits 指定されたリポジトリのコミット履歴を取得する
+//
+// Preconditions:
+// - owner と repo が有効なリポジトリ識別子であること
+// - client が有効な GitHub クライアントであること
+//
+// Postconditions:
+// - 返されるスライスはコミット情報のリストである
+// - ページネーションを使用して全コミットを取得する（最大100ページまで）
+//
+// Invariants:
+// - API レート制限に達した場合は待機して再試行する
+func FetchCommits(ctx context.Context, client *github.Client, owner, repo string) ([]*github.RepositoryCommit, error) {
+	if owner == "" || repo == "" {
+		return nil, fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+	}
+
+	log.Printf("リポジトリ %s/%s のコミット履歴を取得しています...", owner, repo)
+
+	// ページネーション用のオプション
+	opt := &github.CommitsListOptions{
+		ListOptions: github.ListOptions{
+			PerPage: 100, // 1ページあたりの最大件数
+			Page:    0,   // 最初のページ
+		},
+	}
+
+	var allCommits []*github.RepositoryCommit
+
+	// ページネーションループ: 全ページを取得するまで繰り返す
+	// 参考: https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#list-commits
+	for pageNum := 1; pageNum <= maxPages; pageNum++ {
+		// ページ番号を設定
+		if pageNum > 1 {
+			opt.Page = pageNum
+		}
+
+		commits, resp, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
+
+		if err != nil {
+			return nil, fmt.Errorf("リポジトリ %s/%s のコミット履歴取得に失敗しました: %w", owner, repo, err)
+		}
+
+		// レート制限のチェックと処理
+		if err := handleRateLimit(ctx, resp); err != nil {
+			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+		}
+
+		// 取得したコミットを追加
+		allCommits = append(allCommits, commits...)
+
+		log.Printf("取得したコミット数: %d (累計: %d)", len(commits), len(allCommits))
+
+		// 次のページがあるか確認
+		hasNextPage := false
+		if resp.NextPage != 0 {
+			hasNextPage = true
+		} else if len(commits) >= opt.PerPage {
+			hasNextPage = true
+			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数 (%d) が PerPage (%d) に達しているため、次のページを試みます", len(commits), opt.PerPage)
+		} else if len(commits) == 30 {
+			// GitHub APIのデフォルトのページサイズは30件
+			hasNextPage = true
+			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数が30件（GitHub APIのデフォルト）のため、次のページを試みます")
+		} else if len(commits) == 0 {
+			log.Printf("0件取得したため、ページネーションを終了します")
+			break
+		}
+
+		if !hasNextPage {
+			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d）", len(commits))
+			break
+		}
+
+		// 最大ページ数チェック
+		if pageNum >= maxPages {
+			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", maxPages, len(allCommits))
+			break
+		}
+
+		// 次のページ番号を決定
+		if resp.NextPage != 0 {
+			pageNum = resp.NextPage - 1 // pageNum はループでインクリメントされるため -1
+		}
+	}
+
+	log.Printf("リポジトリ %s/%s のコミット履歴取得完了: %d 件", owner, repo, len(allCommits))
+	return allCommits, nil
+}
+
+// FetchCommitHistory 指定されたリポジトリの日付ごとのコミット数を取得する
+//
+// Preconditions:
+// - owner と repo が有効なリポジトリ識別子であること
+// - client が有効な GitHub クライアントであること
+//
+// Postconditions:
+// - 返される map は map[string]int{日付(YYYY-MM-DD): コミット数} の形式である
+//
+// Invariants:
+// - 日付は YYYY-MM-DD 形式で記録される
+// - 日付は UTC で記録される
+func FetchCommitHistory(ctx context.Context, client *github.Client, owner, repo string) (map[string]int, error) {
+	commits, err := FetchCommits(ctx, client, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+
+	// 日付ごとのコミット数を集計
+	history := make(map[string]int)
+	for _, commit := range commits {
+		// コミットの日時を取得（コミッターの日時を使用）
+		if commit.Commit == nil || commit.Commit.Committer == nil || commit.Commit.Committer.Date == nil {
+			continue
+		}
+
+		// UTC で日付を取得（YYYY-MM-DD形式）
+		date := commit.Commit.Committer.Date.Time.UTC()
+		dateStr := date.Format("2006-01-02")
+		history[dateStr]++
+	}
+
+	log.Printf("リポジトリ %s/%s のコミット履歴集計完了: %d 日分", owner, repo, len(history))
+	return history, nil
+}
+
+// FetchCommitTimeDistribution 指定されたリポジトリの時間帯ごとのコミット数を取得する
+//
+// Preconditions:
+// - owner と repo が有効なリポジトリ識別子であること
+// - client が有効な GitHub クライアントであること
+//
+// Postconditions:
+// - 返される map は map[int]int{時間帯(0-23): コミット数} の形式である
+// - 時間帯は UTC で集計される
+//
+// Invariants:
+// - 時間帯は 0-23 の範囲で記録される
+func FetchCommitTimeDistribution(ctx context.Context, client *github.Client, owner, repo string) (map[int]int, error) {
+	commits, err := FetchCommits(ctx, client, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+
+	// 時間帯ごとのコミット数を集計（0-23時）
+	distribution := make(map[int]int)
+	for _, commit := range commits {
+		// コミットの日時を取得（コミッターの日時を使用）
+		if commit.Commit == nil || commit.Commit.Committer == nil || commit.Commit.Committer.Date == nil {
+			continue
+		}
+
+		// UTC で時間帯を取得（0-23時）
+		date := commit.Commit.Committer.Date.Time.UTC()
+		hour := date.Hour()
+		distribution[hour]++
+	}
+
+	log.Printf("リポジトリ %s/%s のコミット時間帯分布集計完了: %d 時間帯", owner, repo, len(distribution))
+	return distribution, nil
+}
+
 // handleRateLimit API レート制限を検出し、適切に待機する
 //
 // Preconditions:

@@ -202,6 +202,128 @@ func main() {
 		fmt.Println("\n✅ 言語情報の取得テストが完了しました")
 	}
 
+	// コミット情報の取得テスト（最初の1件のリポジトリに対して）
+	if len(repos) > 0 {
+		fmt.Println("\n📝 リポジトリのコミット情報を取得しています...")
+		repo := repos[0]
+		owner := repo.GetOwner().GetLogin()
+		repoName := repo.GetName()
+
+		fmt.Printf("\n  [1/1] %s/%s のコミット情報を取得中...\n", owner, repoName)
+
+		// コミット履歴の取得
+		commits, err := repository.FetchCommits(ctx, client, owner, repoName)
+		if err != nil {
+			fmt.Printf("    ⚠️  エラー: %v\n", err)
+		} else {
+			fmt.Printf("    ✅ コミット数: %d\n", len(commits))
+
+			// 最新の5件のコミットを表示
+			maxCommitDisplay := 5
+			if len(commits) < maxCommitDisplay {
+				maxCommitDisplay = len(commits)
+			}
+			if maxCommitDisplay > 0 {
+				fmt.Printf("    📋 最新のコミット（%d件）:\n", maxCommitDisplay)
+				for i := 0; i < maxCommitDisplay; i++ {
+					commit := commits[i]
+					if commit.Commit != nil {
+						message := commit.Commit.GetMessage()
+						// メッセージの最初の行のみ表示（改行を除去）
+						if len(message) > 50 {
+							message = message[:50] + "..."
+						}
+						date := "N/A"
+						if commit.Commit.Committer != nil && commit.Commit.Committer.Date != nil {
+							date = commit.Commit.Committer.Date.Time.Format("2006-01-02 15:04")
+						}
+						fmt.Printf("      - %s (%s)\n", message, date)
+					}
+				}
+			}
+		}
+
+		// 日付ごとのコミット数の取得
+		commitHistory, err := repository.FetchCommitHistory(ctx, client, owner, repoName)
+		if err != nil {
+			fmt.Printf("    ⚠️  日付ごとのコミット数取得エラー: %v\n", err)
+		} else {
+			fmt.Printf("    ✅ コミット履歴: %d 日分\n", len(commitHistory))
+
+			// 最新の5日分を表示
+			type dateCount struct {
+				date  string
+				count int
+			}
+			var historyList []dateCount
+			for date, count := range commitHistory {
+				historyList = append(historyList, dateCount{date: date, count: count})
+			}
+
+			// 日付でソート（降順）
+			for i := 0; i < len(historyList)-1; i++ {
+				for j := i + 1; j < len(historyList); j++ {
+					if historyList[i].date < historyList[j].date {
+						historyList[i], historyList[j] = historyList[j], historyList[i]
+					}
+				}
+			}
+
+			maxHistoryDisplay := 5
+			if len(historyList) < maxHistoryDisplay {
+				maxHistoryDisplay = len(historyList)
+			}
+			if maxHistoryDisplay > 0 {
+				fmt.Printf("    📅 最近のコミット履歴（%d日分）:\n", maxHistoryDisplay)
+				for i := 0; i < maxHistoryDisplay; i++ {
+					item := historyList[i]
+					fmt.Printf("      - %s: %d コミット\n", item.date, item.count)
+				}
+			}
+		}
+
+		// 時間帯ごとのコミット数の取得
+		timeDistribution, err := repository.FetchCommitTimeDistribution(ctx, client, owner, repoName)
+		if err != nil {
+			fmt.Printf("    ⚠️  時間帯ごとのコミット数取得エラー: %v\n", err)
+		} else {
+			fmt.Printf("    ✅ コミット時間帯分布: %d 時間帯\n", len(timeDistribution))
+
+			// コミット数が多い時間帯トップ5を表示
+			type hourCount struct {
+				hour  int
+				count int
+			}
+			var hourList []hourCount
+			for hour, count := range timeDistribution {
+				hourList = append(hourList, hourCount{hour: hour, count: count})
+			}
+
+			// コミット数でソート（降順）
+			for i := 0; i < len(hourList)-1; i++ {
+				for j := i + 1; j < len(hourList); j++ {
+					if hourList[i].count < hourList[j].count {
+						hourList[i], hourList[j] = hourList[j], hourList[i]
+					}
+				}
+			}
+
+			maxHourDisplay := 5
+			if len(hourList) < maxHourDisplay {
+				maxHourDisplay = len(hourList)
+			}
+			if maxHourDisplay > 0 {
+				fmt.Printf("    🕐 コミットが多い時間帯（UTC、上位%d）:\n", maxHourDisplay)
+				for i := 0; i < maxHourDisplay; i++ {
+					item := hourList[i]
+					fmt.Printf("      - %02d時: %d コミット\n", item.hour, item.count)
+				}
+			}
+		}
+
+		fmt.Println("\n✅ コミット情報の取得テストが完了しました")
+	}
+
 	// GitHub Actions の出力変数を設定（GITHUB_OUTPUT ファイルに書き込む）
 	if outputFile := os.Getenv("GITHUB_OUTPUT"); outputFile != "" {
 		file, err := os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

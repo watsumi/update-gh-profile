@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/watsumi/update-gh-profile/internal/config"
+	"github.com/watsumi/update-gh-profile/internal/repository"
 
 	"github.com/google/go-github/v56/github"
 	"golang.org/x/oauth2"
@@ -57,5 +58,31 @@ func main() {
 	}
 
 	fmt.Println("\n✅ GitHub API クライアントの初期化に成功しました！")
-	fmt.Println("次のステップ: リポジトリ情報の取得機能を実装します")
+
+	// リポジトリ一覧の取得
+	fmt.Println("\n📦 リポジトリ一覧を取得しています...")
+	repos, err := repository.FetchUserRepositories(ctx, client, targetUser, true) // excludeForks=true
+	if err != nil {
+		fmt.Printf("エラー: リポジトリ一覧の取得に失敗しました: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n✅ リポジトリ一覧の取得に成功しました: %d 件\n", len(repos))
+
+	// 取得したリポジトリの一部を表示（最大5件）
+	maxDisplay := 5
+	if len(repos) < maxDisplay {
+		maxDisplay = len(repos)
+	}
+	fmt.Printf("\n取得したリポジトリ（最初の%d件）:\n", maxDisplay)
+	for i := 0; i < maxDisplay; i++ {
+		repo := repos[i]
+		fmt.Printf("  - %s (⭐ %d, Fork: %v)\n",
+			repo.GetFullName(),
+			repo.GetStargazersCount(),
+			repo.GetFork())
+	}
+	if len(repos) > maxDisplay {
+		fmt.Printf("  ... 他 %d 件\n", len(repos)-maxDisplay)
+	}
 }

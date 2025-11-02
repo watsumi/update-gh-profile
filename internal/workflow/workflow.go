@@ -63,7 +63,7 @@ func Run(ctx context.Context, token string, config Config) error {
 		logger.LogError(err, "認証ユーザー情報の取得に失敗しました")
 		return fmt.Errorf("認証ユーザー情報の取得に失敗しました: %w", err)
 	}
-	logger.Info("認証ユーザー: %s (ID: %s)", username, userID)
+	logger.Info("認証ユーザー: %s", username)
 
 	// 1-2. GraphQLを使用してデータを一括取得・集計
 	fmt.Println("\n📊 GraphQLを使用してリポジトリデータを一括取得・集計しています...")

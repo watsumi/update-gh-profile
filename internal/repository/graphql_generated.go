@@ -62,7 +62,7 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
         defaultBranchRef {
           target {
             ... on Commit {
-              history(first: 10) {
+              history(first: 5) {
                 totalCount
                 nodes {
                   committedDate
@@ -88,7 +88,7 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 		variables := map[string]interface{}{
 			"login":  username,
 			"isFork": !excludeForks,
-			"first":  50, // ページサイズを50に縮小してタイムアウトを防ぐ
+			"first":  30, // ページサイズを30に縮小してタイムアウトを防ぐ
 		}
 		if after != nil {
 			variables["after"] = *after
@@ -120,12 +120,22 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			logger.Debug("GraphQLクエリを実行中（試行 %d/%d）...", attempt+1, maxRetries)
 
 			// リクエスト前に少し待機してGitHub APIへの負荷を軽減
+			// 最初のリクエストとページネーション後のリクエストで待機
 			if attempt == 0 {
+				var waitTime time.Duration
+				if after == nil {
+					// 最初のページリクエスト
+					waitTime = 1 * time.Second
+				} else {
+					// ページネーション後のリクエスト（より長い待機）
+					waitTime = 2 * time.Second
+				}
+				logger.Debug("リクエスト前に%v待機します...", waitTime)
 				select {
 				case <-ctx.Done():
 					return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
-				case <-time.After(500 * time.Millisecond):
-					// 500ms待機
+				case <-time.After(waitTime):
+					// 待機完了
 				}
 			}
 
@@ -166,9 +176,8 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			}
 		}
 
-		if lastErr != nil {
-			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", lastErr)
-		}
+		// lastErrがnilでない場合（リトライが失敗した場合）は既にエラーが返されている
+		// ここでのチェックは不要（err == nilでbreakしているため）
 
 		// 生成された型からRepositoryGraphQLDataに変換
 		for _, repo := range query.User.Repositories.Nodes {
@@ -247,12 +256,14 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 		after = stringPtr(query.User.Repositories.PageInfo.EndCursor)
 
 		// 次のページ取得前に待機してGitHub APIへの負荷を軽減
-		logger.Debug("次のページを取得する前に1秒待機します...")
+		// ページネーション時はより長い待機時間を設定
+		waitTime := 2 * time.Second
+		logger.Info("次のページを取得する前に%v待機します...（取得済み: %dリポジトリ）", waitTime, len(allRepos))
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
-		case <-time.After(1 * time.Second):
-			// 1秒待機
+		case <-time.After(waitTime):
+			// 待機完了
 		}
 	}
 

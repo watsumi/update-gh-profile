@@ -62,7 +62,7 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
         defaultBranchRef {
           target {
             ... on Commit {
-              history(first: 100) {
+              history(first: 10) {
                 totalCount
                 nodes {
                   committedDate
@@ -88,7 +88,7 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 		variables := map[string]interface{}{
 			"login":  username,
 			"isFork": !excludeForks,
-			"first":  100,
+			"first":  50, // ページサイズを50に縮小してタイムアウトを防ぐ
 		}
 		if after != nil {
 			variables["after"] = *after
@@ -118,6 +118,17 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			}
 
 			logger.Debug("GraphQLクエリを実行中（試行 %d/%d）...", attempt+1, maxRetries)
+
+			// リクエスト前に少し待機してGitHub APIへの負荷を軽減
+			if attempt == 0 {
+				select {
+				case <-ctx.Done():
+					return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
+				case <-time.After(500 * time.Millisecond):
+					// 500ms待機
+				}
+			}
+
 			err = graphqlClient.Exec(ctx, queryStr, &query, variables)
 			if err == nil {
 				if attempt > 0 {
@@ -234,6 +245,15 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			break
 		}
 		after = stringPtr(query.User.Repositories.PageInfo.EndCursor)
+
+		// 次のページ取得前に待機してGitHub APIへの負荷を軽減
+		logger.Debug("次のページを取得する前に1秒待機します...")
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
+		case <-time.After(1 * time.Second):
+			// 1秒待機
+		}
 	}
 
 	return allRepos, nil

@@ -74,11 +74,8 @@ func AddUpdateTimestamp(readmePath, sectionTag string, timestamp time.Time, time
 		return fmt.Errorf("README ファイルの読み込みに失敗しました: %w", err)
 	}
 
-	// 既存のセクションコンテンツを取得
-	sectionContent, err := FindSection(content, startTag, endTag)
-	if err != nil {
-		return fmt.Errorf("セクションの検索に失敗しました: %w", err)
-	}
+	// 既存のセクションコンテンツを取得（エラーは無視して空文字列を扱う）
+	sectionContent, _ := FindSection(content, startTag, endTag)
 
 	// タイムスタンプをフォーマット
 	var timestampStr string
@@ -102,7 +99,7 @@ func AddUpdateTimestamp(readmePath, sectionTag string, timestamp time.Time, time
 		newContent = strings.TrimPrefix(timestampMarkdown, "\n\n")
 	}
 
-	// セクションを更新
+	// セクションを更新（タグがない場合は自動追加される）
 	err = UpdateSection(readmePath, startTag, endTag, newContent)
 	if err != nil {
 		return fmt.Errorf("セクションの更新に失敗しました: %w", err)

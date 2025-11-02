@@ -8,6 +8,7 @@ import (
 )
 
 // UpdateSection README.md の指定されたセクションを新しいコンテンツで置き換える
+// タグが存在しない場合は自動的に追加する
 //
 // Preconditions:
 // - readmePath が有効な README.md ファイルパスであること
@@ -16,11 +17,11 @@ import (
 //
 // Postconditions:
 // - README.md の startTag と endTag の間が newContent で置き換えられる
+// - タグが存在しない場合はファイル末尾に追加される
 // - 既存のコンテンツ（タグ以外）は保持される
 //
 // Invariants:
 // - ファイルが存在しない場合はエラーが返される
-// - タグが見つからない場合はエラーが返される
 func UpdateSection(readmePath, startTag, endTag, newContent string) error {
 	// README ファイルを読み込む
 	content, err := os.ReadFile(readmePath)
@@ -31,7 +32,7 @@ func UpdateSection(readmePath, startTag, endTag, newContent string) error {
 	readmeContent := string(content)
 
 	// タグ間のコンテンツを置き換え
-	updatedContent, err := ReplaceSection(readmeContent, startTag, endTag, newContent)
+	updatedContent, err := ReplaceSectionOrAppend(readmeContent, startTag, endTag, newContent)
 	if err != nil {
 		return fmt.Errorf("セクションの置き換えに失敗しました: %w", err)
 	}
@@ -43,6 +44,50 @@ func UpdateSection(readmePath, startTag, endTag, newContent string) error {
 	}
 
 	return nil
+}
+
+// ReplaceSectionOrAppend テキスト内の指定されたセクション（startTag と endTag の間）を新しいコンテンツで置き換える
+// タグが存在しない場合はファイル末尾に自動追加する
+//
+// Preconditions:
+// - content が読み込まれたファイルのコンテンツであること
+// - startTag と endTag が有効なコメントタグ文字列であること
+//
+// Postconditions:
+// - startTag と endTag の間のコンテンツが newContent で置き換えられる
+// - タグが存在しない場合はファイル末尾に追加される
+// - タグ自体は保持される
+//
+// Invariants:
+// - 既存のコンテンツ（タグ以外）は保持される
+func ReplaceSectionOrAppend(content, startTag, endTag, newContent string) (string, error) {
+	// startTag と endTag が存在するか確認
+	startIndex := strings.Index(content, startTag)
+	endIndex := strings.Index(content, endTag)
+
+	// タグが存在しない場合はファイル末尾に追加
+	if startIndex == -1 || endIndex == -1 {
+		// ファイル末尾に改行がない場合は追加
+		result := content
+		if !strings.HasSuffix(result, "\n") && !strings.HasSuffix(result, "\n\n") {
+			result += "\n"
+		}
+		// タグとコンテンツを追加
+		result += "\n" + startTag + "\n"
+		if newContent != "" {
+			result += newContent + "\n"
+		}
+		result += endTag + "\n"
+		return result, nil
+	}
+
+	// endTag の位置が startTag より前にある場合はエラー
+	if endIndex < startIndex {
+		return "", fmt.Errorf("終了タグが開始タグより前にあります")
+	}
+
+	// 既存の ReplaceSection のロジックを使用
+	return ReplaceSection(content, startTag, endTag, newContent)
 }
 
 // ReplaceSection テキスト内の指定されたセクション（startTag と endTag の間）を新しいコンテンツで置き換える

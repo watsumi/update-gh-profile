@@ -157,10 +157,6 @@ query ProductiveTime($login: String!, $userId: ID!, $since: GitTimestamp!, $unti
                 history(first: 50, since: $since, until: $until, author: {id: $userId}) {
                   edges {
                     node {
-                      message
-                      author {
-                        email
-                      }
                       committedDate
                     }
                   }

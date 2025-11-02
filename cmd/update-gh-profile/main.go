@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/watsumi/update-gh-profile/internal/config"
+	"github.com/watsumi/update-gh-profile/internal/logger"
 	"github.com/watsumi/update-gh-profile/internal/workflow"
 
 	"github.com/google/go-github/v56/github"
@@ -85,6 +86,13 @@ func main() {
 
 	fmt.Println("\n✅ GitHub API クライアントの初期化に成功しました！")
 
+	// ログレベルの設定（環境変数から読み込み）
+	logLevelStr := os.Getenv("LOG_LEVEL")
+	if logLevelStr == "" {
+		logLevelStr = "INFO"
+	}
+	logLevel := logger.ParseLogLevel(logLevelStr)
+
 	// ワークフロー設定
 	workflowConfig := workflow.Config{
 		RepoPath:        ".",                                    // カレントディレクトリ
@@ -94,6 +102,7 @@ func main() {
 		EnableGitPush:   false,                                  // デフォルトではプッシュしない（テストモード）
 		MaxRepositories: 0,                                      // 0 = すべてのリポジトリ
 		ExcludeForks:    excludeForks,
+		LogLevel:        logLevel, // ログレベル
 	}
 
 	// ワークフローを実行

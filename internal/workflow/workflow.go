@@ -10,6 +10,7 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/aggregator"
 	"github.com/watsumi/update-gh-profile/internal/generator"
 	"github.com/watsumi/update-gh-profile/internal/git"
+	"github.com/watsumi/update-gh-profile/internal/logger"
 	"github.com/watsumi/update-gh-profile/internal/readme"
 	"github.com/watsumi/update-gh-profile/internal/repository"
 
@@ -18,13 +19,14 @@ import (
 
 // Config ワークフロー設定
 type Config struct {
-	RepoPath        string // リポジトリパス（README.md がある場所）
-	SVGOutputDir    string // SVG ファイルの出力ディレクトリ
-	Timezone        string // タイムゾーン（例: "Asia/Tokyo", "UTC"）
-	CommitMessage   string // Git コミットメッセージ
-	EnableGitPush   bool   // Git プッシュを有効にするか
-	MaxRepositories int    // 処理する最大リポジトリ数（0 = すべて）
-	ExcludeForks    bool   // フォークリポジトリを除外するか
+	RepoPath        string          // リポジトリパス（README.md がある場所）
+	SVGOutputDir    string          // SVG ファイルの出力ディレクトリ
+	Timezone        string          // タイムゾーン（例: "Asia/Tokyo", "UTC"）
+	CommitMessage   string          // Git コミットメッセージ
+	EnableGitPush   bool            // Git プッシュを有効にするか
+	MaxRepositories int             // 処理する最大リポジトリ数（0 = すべて）
+	ExcludeForks    bool            // フォークリポジトリを除外するか
+	LogLevel        logger.LogLevel // ログレベル
 }
 
 // Run メイン処理フローを実行する
@@ -42,24 +44,37 @@ type Config struct {
 // Invariants:
 // - エラーが発生した場合は適切に処理される
 func Run(ctx context.Context, client *github.Client, config Config) error {
+	// ロガーの設定
+	if config.LogLevel != 0 {
+		logger.DefaultLogger.SetLevel(config.LogLevel)
+	}
+
+	logger.Info("ワークフローを開始します")
+
 	// 認証ユーザーを取得
 	authUser, _, err := client.Users.Get(ctx, "")
 	if err != nil {
+		logger.LogError(err, "認証ユーザー情報の取得に失敗しました")
 		return fmt.Errorf("認証ユーザー情報の取得に失敗しました: %w", err)
 	}
 	username := authUser.GetLogin()
+	logger.Info("認証ユーザー: %s", username)
 
 	// 1. リポジトリ一覧の取得
+	logger.Info("リポジトリ一覧を取得しています...")
 	fmt.Println("📦 リポジトリ一覧を取得しています...")
 	repos, err := repository.FetchUserRepositories(ctx, client, username, config.ExcludeForks, true)
 	if err != nil {
+		logger.LogError(err, "リポジトリ一覧の取得に失敗しました")
 		return fmt.Errorf("リポジトリ一覧の取得に失敗しました: %w", err)
 	}
 
 	if len(repos) == 0 {
+		logger.Warning("リポジトリが見つかりませんでした")
 		return fmt.Errorf("リポジトリが見つかりませんでした")
 	}
 
+	logger.Info("%d 個のリポジトリを取得しました", len(repos))
 	fmt.Printf("✅ %d 個のリポジトリを取得しました\n", len(repos))
 
 	// 最大リポジトリ数の制限
@@ -84,9 +99,13 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 
 		fmt.Printf("  [%d/%d] %s/%s を処理中...\n", i+1, len(repos), owner, repoName)
 
+		// リポジトリキー（エラーログ用）
+		repoKey := fmt.Sprintf("%s/%s", owner, repoName)
+
 		// 言語データの取得
 		langs, err := repository.FetchRepositoryLanguages(ctx, client, owner, repoName)
 		if err != nil {
+			logger.LogErrorWithContext(err, repoKey, "言語データの取得に失敗しました")
 			fmt.Printf("    ⚠️  言語データの取得に失敗: %v\n", err)
 			continue
 		}
@@ -97,17 +116,19 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 		}
 
 		// コミット履歴の取得
-		repoKey := fmt.Sprintf("%s/%s", owner, repoName)
 		commitHistory, err := repository.FetchCommitHistory(ctx, client, owner, repoName)
 		if err != nil {
+			logger.LogErrorWithContext(err, repoKey, "コミット履歴の取得に失敗しました")
 			fmt.Printf("    ⚠️  コミット履歴の取得に失敗: %v\n", err)
 		} else {
 			commitHistories[repoKey] = commitHistory
+			logger.Debug("%s: %d 日分のコミット履歴を取得しました", repoKey, len(commitHistory))
 		}
 
 		// コミット時間帯の取得
 		timeDist, err := repository.FetchCommitTimeDistribution(ctx, client, owner, repoName)
 		if err != nil {
+			logger.LogErrorWithContext(err, repoKey, "コミット時間帯の取得に失敗しました")
 			fmt.Printf("    ⚠️  コミット時間帯の取得に失敗: %v\n", err)
 		} else {
 			timeDistributions[repoKey] = timeDist
@@ -116,14 +137,17 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 		// コミット数の取得（概算）
 		commits, err := repository.FetchCommits(ctx, client, owner, repoName)
 		if err != nil {
+			logger.LogErrorWithContext(err, repoKey, "コミットデータの取得に失敗しました")
 			fmt.Printf("    ⚠️  コミットデータの取得に失敗: %v\n", err)
 		} else {
 			totalCommits += len(commits)
+			logger.Debug("%s: %d コミットを取得しました", repoKey, len(commits))
 		}
 
 		// コミットごとの言語取得
 		commitLangs, err := repository.FetchCommitLanguages(ctx, client, owner, repoName)
 		if err != nil {
+			logger.LogErrorWithContext(err, repoKey, "コミット言語データの取得に失敗しました")
 			fmt.Printf("    ⚠️  コミット言語データの取得に失敗: %v\n", err)
 		} else if len(commitLangs) > 0 {
 			// repoKeyをプレフィックスとして追加
@@ -141,9 +165,11 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 		// プルリクエスト数の取得
 		prCount, err := repository.FetchPullRequests(ctx, client, owner, repoName)
 		if err != nil {
+			logger.LogErrorWithContext(err, repoKey, "プルリクエストデータの取得に失敗しました")
 			fmt.Printf("    ⚠️  プルリクエストデータの取得に失敗: %v\n", err)
 		} else {
 			totalPRs += prCount
+			logger.Debug("%s: %d プルリクエストを取得しました", repoKey, prCount)
 		}
 	}
 
@@ -158,12 +184,16 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 	}
 
 	// コミット履歴の集計
+	logger.Info("コミット履歴を集計しています...")
 	aggregatedHistoryMap := aggregator.AggregateCommitHistory(commitHistories)
 	aggregatedHistory := aggregator.SortCommitHistoryByDate(aggregatedHistoryMap)
+	logger.Info("コミット履歴の集計が完了しました: %d 日分", len(aggregatedHistory))
 
 	// コミット時間帯の集計
+	logger.Info("コミット時間帯を集計しています...")
 	aggregatedTimeDistMap := aggregator.AggregateCommitTimeDistribution(timeDistributions)
 	aggregatedTimeDist := aggregator.SortCommitTimeDistributionByHour(aggregatedTimeDistMap)
+	logger.Info("コミット時間帯の集計が完了しました: %d 時間帯", len(aggregatedTimeDist))
 
 	// コミットごとの言語Top5
 	top5Languages := aggregator.AggregateCommitLanguages(allCommitLanguages)
@@ -193,8 +223,11 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 		if err == nil {
 			langPath := filepath.Join(svgOutputDir, "language_chart.svg")
 			err = generator.SaveSVG(langSVG, langPath)
-			if err == nil {
+			if err != nil {
+				logger.LogError(err, "言語ランキング SVG の保存に失敗しました")
+			} else {
 				svgs["language_chart.svg"] = langPath
+				logger.Info("言語ランキング SVG を生成しました: %s", langPath)
 				fmt.Printf("  ✅ 言語ランキング SVG を生成: %s\n", langPath)
 			}
 		}
@@ -298,8 +331,10 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 
 			err = readme.EmbedSVGWithCustomPath(readmePath, relPath, sectionTag, "")
 			if err != nil {
+				logger.LogErrorWithContext(err, sectionTag, "セクションの更新に失敗しました")
 				fmt.Printf("  ⚠️  セクション %s の更新に失敗: %v\n", sectionTag, err)
 			} else {
+				logger.Info("セクション %s を更新しました", sectionTag)
 				fmt.Printf("  ✅ セクション %s を更新\n", sectionTag)
 			}
 		}
@@ -312,8 +347,10 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 	timestamp := time.Now().UTC()
 	err = readme.AddUpdateTimestamp(readmePath, "UPDATE_TIMESTAMP", timestamp, config.Timezone)
 	if err != nil {
+		logger.LogError(err, "更新日時の追加に失敗しました")
 		fmt.Printf("  ⚠️  更新日時の追加に失敗: %v\n", err)
 	} else {
+		logger.Info("更新日時を追加しました")
 		fmt.Printf("  ✅ 更新日時を追加\n")
 	}
 
@@ -332,6 +369,7 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 
 	// Git リポジトリか確認
 	if !git.IsGitRepository(repoPath) {
+		logger.Warning("Git リポジトリではないため、コミット・プッシュをスキップします")
 		fmt.Println("  ℹ️  Git リポジトリではないため、コミット・プッシュをスキップします")
 		return nil
 	}
@@ -339,10 +377,12 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 	// 変更があるか確認
 	hasChanges, err := git.HasChanges(repoPath)
 	if err != nil {
+		logger.LogError(err, "変更の確認に失敗しました")
 		return fmt.Errorf("変更の確認に失敗しました: %w", err)
 	}
 
 	if !hasChanges {
+		logger.Info("変更がないため、コミット・プッシュをスキップします")
 		fmt.Println("  ℹ️  変更がないため、コミット・プッシュをスキップします")
 		return nil
 	}
@@ -354,13 +394,17 @@ func Run(ctx context.Context, client *github.Client, config Config) error {
 	}
 
 	// コミット・プッシュ
+	logger.Info("Git コミット・プッシュを実行しています...")
 	err = git.CommitAndPush(repoPath, commitMsg, nil, "origin", "")
 	if err != nil {
+		logger.LogError(err, "Git コミット・プッシュに失敗しました")
 		return fmt.Errorf("Git コミット・プッシュに失敗しました: %w", err)
 	}
 
+	logger.Info("Git コミット・プッシュが完了しました")
 	fmt.Println("  ✅ Git コミット・プッシュが完了しました")
 
+	logger.Info("すべての処理が完了しました")
 	fmt.Println("\n✅ すべての処理が完了しました！")
 
 	return nil

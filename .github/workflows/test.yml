@@ -1,0 +1,96 @@
+name: Test
+
+# ワークフローのトリガー設定
+on:
+  # プッシュされた時（mainブランチのみ）
+  push:
+    branches:
+      - main
+  # プルリクエストが作成・更新された時
+  pull_request:
+    branches:
+      - main
+  # 手動実行も可能
+  workflow_dispatch:
+
+# ワークフローの権限設定
+permissions:
+  contents: read
+  pull-requests: read
+
+# ジョブの定義
+jobs:
+  # テストジョブ
+  test:
+    # 実行環境（Ubuntu最新版）
+    runs-on: ubuntu-latest
+
+    # ジョブの実行ステップ
+    steps:
+      # 1. リポジトリをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Go環境のセットアップ
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Goのバージョンを指定（go.modと合わせる）
+          go-version-file: go.mod
+
+      # 3. 依存関係のキャッシュ（ビルド時間の短縮）
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # 4. 依存関係のダウンロード
+      - name: Download dependencies
+        run: go mod download
+
+      # 5. 依存関係の整理（go.modとgo.sumの整合性確認）
+      - name: Tidy dependencies
+        run: go mod tidy
+
+      # 6. コードフォーマットの確認（フォーマットされていないコードを検出）
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "以下のファイルがフォーマットされていません:"
+            echo "$unformatted"
+            echo ""
+            echo "以下のコマンドで修正してください:"
+            echo "  gofmt -w ."
+            echo "  または:"
+            echo "  go fmt ./..."
+            exit 1
+          fi
+          echo "✓ すべてのコードがフォーマットされています"
+
+      # 7. コードのビルド確認（コンパイルエラーの検出）
+      - name: Build
+        run: go build ./...
+
+      # 8. テストの実行
+      - name: Run tests
+        run: go test -v ./...
+
+      # 9. コードカバレッジの確認（オプション、今後拡張可能）
+      - name: Test coverage
+        run: go test -coverprofile=coverage.out ./...
+        continue-on-error: true
+
+      # 10. カバレッジレポートの表示（オプション）
+      - name: Coverage report
+        if: always()
+        run: |
+          if [ -f coverage.out ]; then
+            go tool cover -func=coverage.out | head -20
+          fi
+        continue-on-error: true

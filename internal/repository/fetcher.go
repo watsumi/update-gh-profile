@@ -4,17 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/google/go-github/v56/github"
-)
-
-const (
-	// maxPages 最大ページ数（無限ループを防ぐため）
-	// GitHub API の制限: per_page=100 の場合、100ページで最大10,000リポジトリ
-	maxPages = 100
 )
 
 // FetchUserRepositories GitHub API を使用して認証ユーザーのリポジトリ一覧を取得する
@@ -33,8 +24,8 @@ const (
 // - API レート制限に達した場合は待機して再試行する
 // - 認証ユーザー自身のリポジトリのみを取得する
 func FetchUserRepositories(ctx context.Context, client *github.Client, username string, excludeForks bool, isAuthenticatedUser bool) ([]*github.Repository, error) {
-	if username == "" {
-		return nil, fmt.Errorf("username が空です")
+	if err := ValidateUsername(username); err != nil {
+		return nil, err
 	}
 
 	if !isAuthenticatedUser {
@@ -51,8 +42,8 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 		Sort:      "updated",
 		Direction: "desc",
 		ListOptions: github.ListOptions{
-			PerPage: 100, // 1ページあたりの最大件数（GitHub APIの最大値）
-			Page:    0,   // 最初のページ（0から開始、または1から開始）
+			PerPage: DefaultPerPage,
+			Page:    0, // 最初のページ
 		},
 	}
 
@@ -61,7 +52,7 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 	// ページネーションループ: 全ページを取得するまで繰り返す
 	// username を空文字列にすると、認証ユーザー自身のリポジトリ（プライベート含む）を取得
 	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
-	for pageNum := 1; pageNum <= maxPages; pageNum++ {
+	for pageNum := 1; pageNum <= MaxPages; pageNum++ {
 		// ページ番号を設定（GitHub APIは1から開始）
 		if pageNum > 1 {
 			opt.Page = pageNum
@@ -74,7 +65,7 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 		}
 
 		// レート制限のチェックと処理
-		if err := handleRateLimit(ctx, resp); err != nil {
+		if err := HandleRateLimit(ctx, resp); err != nil {
 			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
 		}
 
@@ -86,47 +77,25 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 		log.Printf("ページネーション情報: 現在ページ=%d (手動=%d), 次ページ=%d, 最終ページ=%d, PerPage=%d",
 			opt.Page, pageNum, resp.NextPage, resp.LastPage, opt.PerPage)
 
-		// 次のページがあるか確認
-		// 1. resp.NextPage が 0 でない場合は、GitHub API のレスポンスヘッダーから取得した情報を使用
-		// 2. resp.NextPage が 0 の場合でも、取得した件数が PerPage に達している場合は次のページがある可能性がある
-		// 3. 取得した件数が30件（GitHub APIのデフォルト）の場合は、次のページがある可能性がある
-		// 4. 取得した件数が 0 の場合は、次のページがないと判断
-		hasNextPage := false
-		if resp.NextPage != 0 {
-			hasNextPage = true
-			log.Printf("レスポンスヘッダーから次ページ (%d) を検出", resp.NextPage)
-		} else if len(repos) >= opt.PerPage {
-			// NextPage が 0 でも、取得した件数が PerPage に達している場合は次のページを試みる
-			hasNextPage = true
-			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数 (%d) が PerPage (%d) に達しているため、次のページを試みます", len(repos), opt.PerPage)
-		} else if len(repos) == 30 {
-			// GitHub APIのデフォルトのページサイズは30件
-			// 30件取得できている場合は、PerPageパラメータが無視されている可能性がある
-			// 次のページを試みる
-			hasNextPage = true
-			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数が30件（GitHub APIのデフォルト）のため、次のページを試みます")
-		} else if len(repos) == 0 {
-			// 0件取得した場合は終了
-			log.Printf("0件取得したため、ページネーションを終了します")
+		// 次のページがあるか確認（共通関数を使用）
+		paginationResult := CheckPagination(resp, len(repos), opt.PerPage)
+
+		if !paginationResult.HasNextPage {
+			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d, PerPage: %d）", len(repos), opt.PerPage)
 			break
 		}
 
-		if !hasNextPage {
-			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d, PerPage: %d）", len(repos), opt.PerPage)
-			break // 次のページがない場合は終了
-		}
-
 		// 最大ページ数チェック（次のページに進む前に確認）
-		if pageNum >= maxPages {
-			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", maxPages, len(allRepos))
+		if pageNum >= MaxPages {
+			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", MaxPages, len(allRepos))
 			break
 		}
 
 		// 次のページ番号を決定
-		if resp.NextPage != 0 {
-			pageNum = resp.NextPage - 1 // pageNum はループでインクリメントされるため -1
+		if paginationResult.NextPageNum != 0 {
+			pageNum = paginationResult.NextPageNum - 1 // pageNum はループでインクリメントされるため -1
 		}
-		log.Printf("次のページを取得します（ページ番号: %d / 最大: %d）...", pageNum+1, maxPages)
+		log.Printf("次のページを取得します（ページ番号: %d / 最大: %d）...", pageNum+1, MaxPages)
 	}
 
 	log.Printf("全リポジトリ取得完了: %d 件", len(allRepos))
@@ -161,8 +130,8 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 // - API エラー時は適切なエラーを返す
 // - レート制限に達した場合は待機して再試行する
 func FetchRepositoryLanguages(ctx context.Context, client *github.Client, owner, repo string) (map[string]int, error) {
-	if owner == "" || repo == "" {
-		return nil, fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
+		return nil, err
 	}
 
 	// GitHub API の /repos/{owner}/{repo}/languages エンドポイントを呼び出す
@@ -174,7 +143,7 @@ func FetchRepositoryLanguages(ctx context.Context, client *github.Client, owner,
 	}
 
 	// レート制限のチェックと処理
-	if err := handleRateLimit(ctx, resp); err != nil {
+	if err := HandleRateLimit(ctx, resp); err != nil {
 		return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
 	}
 
@@ -195,8 +164,8 @@ func FetchRepositoryLanguages(ctx context.Context, client *github.Client, owner,
 // Invariants:
 // - API レート制限に達した場合は待機して再試行する
 func FetchCommits(ctx context.Context, client *github.Client, owner, repo string) ([]*github.RepositoryCommit, error) {
-	if owner == "" || repo == "" {
-		return nil, fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
+		return nil, err
 	}
 
 	log.Printf("リポジトリ %s/%s のコミット履歴を取得しています...", owner, repo)
@@ -204,8 +173,8 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 	// ページネーション用のオプション
 	opt := &github.CommitsListOptions{
 		ListOptions: github.ListOptions{
-			PerPage: 100, // 1ページあたりの最大件数
-			Page:    0,   // 最初のページ
+			PerPage: DefaultPerPage,
+			Page:    0, // 最初のページ
 		},
 	}
 
@@ -213,7 +182,7 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 
 	// ページネーションループ: 全ページを取得するまで繰り返す
 	// 参考: https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#list-commits
-	for pageNum := 1; pageNum <= maxPages; pageNum++ {
+	for pageNum := 1; pageNum <= MaxPages; pageNum++ {
 		// ページ番号を設定
 		if pageNum > 1 {
 			opt.Page = pageNum
@@ -226,7 +195,7 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 		}
 
 		// レート制限のチェックと処理
-		if err := handleRateLimit(ctx, resp); err != nil {
+		if err := HandleRateLimit(ctx, resp); err != nil {
 			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
 		}
 
@@ -235,36 +204,23 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 
 		log.Printf("取得したコミット数: %d (累計: %d)", len(commits), len(allCommits))
 
-		// 次のページがあるか確認
-		hasNextPage := false
-		if resp.NextPage != 0 {
-			hasNextPage = true
-		} else if len(commits) >= opt.PerPage {
-			hasNextPage = true
-			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数 (%d) が PerPage (%d) に達しているため、次のページを試みます", len(commits), opt.PerPage)
-		} else if len(commits) == 30 {
-			// GitHub APIのデフォルトのページサイズは30件
-			hasNextPage = true
-			log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数が30件（GitHub APIのデフォルト）のため、次のページを試みます")
-		} else if len(commits) == 0 {
-			log.Printf("0件取得したため、ページネーションを終了します")
-			break
-		}
+		// 次のページがあるか確認（共通関数を使用）
+		paginationResult := CheckPagination(resp, len(commits), opt.PerPage)
 
-		if !hasNextPage {
+		if !paginationResult.HasNextPage {
 			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d）", len(commits))
 			break
 		}
 
 		// 最大ページ数チェック
-		if pageNum >= maxPages {
-			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", maxPages, len(allCommits))
+		if pageNum >= MaxPages {
+			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", MaxPages, len(allCommits))
 			break
 		}
 
 		// 次のページ番号を決定
-		if resp.NextPage != 0 {
-			pageNum = resp.NextPage - 1 // pageNum はループでインクリメントされるため -1
+		if paginationResult.NextPageNum != 0 {
+			pageNum = paginationResult.NextPageNum - 1 // pageNum はループでインクリメントされるため -1
 		}
 	}
 
@@ -344,116 +300,6 @@ func FetchCommitTimeDistribution(ctx context.Context, client *github.Client, own
 	return distribution, nil
 }
 
-// detectLanguageFromFilename ファイル名から言語を判定する
-//
-// Preconditions:
-// - filename が有効なファイルパスであること
-//
-// Postconditions:
-// - 言語名を返す（判定できない場合は空文字列）
-//
-// Invariants:
-// - 拡張子とファイル名から言語を判定する
-func detectLanguageFromFilename(filename string) string {
-	if filename == "" {
-		return ""
-	}
-
-	ext := strings.ToLower(filepath.Ext(filename))
-	filenameLower := strings.ToLower(filepath.Base(filename))
-
-	// 拡張子と言語のマッピング
-	extToLang := map[string]string{
-		".go":      "Go",
-		".py":      "Python",
-		".js":      "JavaScript",
-		".ts":      "TypeScript",
-		".tsx":     "TypeScript",
-		".jsx":     "JavaScript",
-		".java":    "Java",
-		".kt":      "Kotlin",
-		".scala":   "Scala",
-		".clj":     "Clojure",
-		".cljs":    "Clojure",
-		".cpp":     "C++",
-		".cc":      "C++",
-		".cxx":     "C++",
-		".c":       "C",
-		".h":       "C",
-		".hpp":     "C++",
-		".cs":      "C#",
-		".php":     "PHP",
-		".rb":      "Ruby",
-		".swift":   "Swift",
-		".dart":    "Dart",
-		".rs":      "Rust",
-		".cr":      "Crystal",
-		".ex":      "Elixir",
-		".exs":     "Elixir",
-		".erl":     "Erlang",
-		".hrl":     "Erlang",
-		".lua":     "Lua",
-		".r":       "R",
-		".sql":     "SQL",
-		".sh":      "Shell",
-		".bash":    "Shell",
-		".zsh":     "Shell",
-		".fish":    "Shell",
-		".ps1":     "PowerShell",
-		".psm1":    "PowerShell",
-		".html":    "HTML",
-		".htm":     "HTML",
-		".css":     "CSS",
-		".scss":    "SCSS",
-		".sass":    "Sass",
-		".less":    "Less",
-		".xml":     "XML",
-		".json":    "JSON",
-		".yaml":    "YAML",
-		".yml":     "YAML",
-		".toml":    "TOML",
-		".ini":     "INI",
-		".md":      "Markdown",
-		".tex":     "LaTeX",
-		".rkt":     "Racket",
-		".ml":      "OCaml",
-		".fs":      "F#",
-		".fsx":     "F#",
-		".vb":      "Visual Basic",
-		".hs":      "Haskell",
-		".lhs":     "Haskell",
-		".jl":      "Julia",
-		".pl":      "Perl",
-		".pm":      "Perl",
-		".nim":     "Nim",
-		".zig":     "Zig",
-		".v":       "V",
-		".dockerfile": "Dockerfile",
-		".makefile":   "Makefile",
-		".make":       "Makefile",
-	}
-
-	// 拡張子から判定
-	if lang, ok := extToLang[ext]; ok {
-		return lang
-	}
-
-	// ファイル名から判定（Dockerfile, Makefile など）
-	if lang, ok := extToLang[filenameLower]; ok {
-		return lang
-	}
-
-	// 特殊なファイル名パターン
-	if strings.HasPrefix(filenameLower, "dockerfile") {
-		return "Dockerfile"
-	}
-	if strings.HasPrefix(filenameLower, "makefile") {
-		return "Makefile"
-	}
-
-	return ""
-}
-
 // FetchCommitLanguages 指定されたリポジトリのコミットごとの使用言語を取得する
 //
 // Preconditions:
@@ -468,8 +314,8 @@ func detectLanguageFromFilename(filename string) string {
 // - 各コミットの変更ファイルから言語を抽出する
 // - 言語名は大文字小文字を区別する（Go, Python など）
 func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, repo string) (map[string]map[string]int, error) {
-	if owner == "" || repo == "" {
-		return nil, fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
+		return nil, err
 	}
 
 	log.Printf("リポジトリ %s/%s のコミットごとの言語使用状況を取得しています...", owner, repo)
@@ -485,7 +331,7 @@ func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, rep
 	commitLanguages := make(map[string]map[string]int)
 
 	// 各コミットの詳細情報を取得（変更ファイル情報を含む）
-	maxCommits := 100 // パフォーマンスを考慮して、最大100コミットまで処理
+	maxCommits := MaxCommitsForLanguageDetection
 	if len(commits) < maxCommits {
 		maxCommits = len(commits)
 	}
@@ -504,7 +350,7 @@ func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, rep
 		}
 
 		// レート制限のチェックと処理
-		if err := handleRateLimit(ctx, resp); err != nil {
+		if err := HandleRateLimit(ctx, resp); err != nil {
 			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
 		}
 
@@ -513,8 +359,8 @@ func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, rep
 
 		if commitDetail.Files != nil {
 			for _, file := range commitDetail.Files {
-				// ファイル名から言語を判定
-				lang := detectLanguageFromFilename(file.GetFilename())
+				// ファイル名から言語を判定（共通関数を使用）
+				lang := DetectLanguageFromFilename(file.GetFilename())
 				if lang != "" {
 					langs[lang]++
 				}
@@ -535,48 +381,82 @@ func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, rep
 	return commitLanguages, nil
 }
 
-// handleRateLimit API レート制限を検出し、適切に待機する
+// FetchPullRequests 指定されたリポジトリのプルリクエスト数を取得する
 //
 // Preconditions:
-// - resp が GitHub API レスポンスであること
+// - owner と repo が有効なリポジトリ識別子であること
+// - client が有効な GitHub クライアントであること
 //
 // Postconditions:
-// - レート制限に達している場合は、制限解除まで待機する
+// - 返される値はプルリクエストの総数である
+// - すべての状態（open, closed, all）のプルリクエストを集計する
 //
 // Invariants:
-// - 待機時間はレスポンスヘッダーから計算される
-func handleRateLimit(ctx context.Context, resp *github.Response) error {
-	// レート制限の状態を確認
-	if resp.Rate.Remaining == 0 {
-		// レート制限に達している場合
-		// Reset はレート制限がリセットされる時刻（time.Time型）
-		resetTime := resp.Rate.Reset.Time
-		waitDuration := time.Until(resetTime)
-
-		// 待機時間が負の場合は0にする（既にリセット済み）
-		if waitDuration < 0 {
-			waitDuration = 0
-		}
-
-		// 待機時間に少し余裕を追加（1秒）
-		waitDuration += time.Second
-
-		if waitDuration > 0 {
-			log.Printf("レート制限に達しました。%v 待機します...", waitDuration)
-			select {
-			case <-ctx.Done():
-				return ctx.Err() // コンテキストがキャンセルされた場合
-			case <-time.After(waitDuration):
-				// 待機完了
-			}
-		}
-	} else {
-		// レート制限に余裕がある場合は、残りリクエスト数をログに記録
-		log.Printf("レート制限の残り: %d/%d (リセット時刻: %v)",
-			resp.Rate.Remaining,
-			resp.Rate.Limit,
-			resp.Rate.Reset.Time.Format("2006-01-02 15:04:05"))
+// - ページネーションを使用して全PRを取得する（最大100ページまで）
+// - API レート制限に達した場合は待機して再試行する
+func FetchPullRequests(ctx context.Context, client *github.Client, owner, repo string) (int, error) {
+	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
+		return 0, err
 	}
 
-	return nil
+	log.Printf("リポジトリ %s/%s のプルリクエスト数を取得しています...", owner, repo)
+
+	// ページネーション用のオプション
+	// State: "all" を指定することで、すべての状態（open, closed）のPRを取得
+	// 参考: https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests
+	opt := &github.PullRequestListOptions{
+		State: "all", // "open", "closed", "all" から選択
+		ListOptions: github.ListOptions{
+			PerPage: DefaultPerPage,
+			Page:    0, // 最初のページ
+		},
+	}
+
+	var totalCount int
+
+	// ページネーションループ: 全ページを取得するまで繰り返す
+	for pageNum := 1; pageNum <= MaxPages; pageNum++ {
+		// ページ番号を設定
+		if pageNum > 1 {
+			opt.Page = pageNum
+		}
+
+		pullRequests, resp, err := client.PullRequests.List(ctx, owner, repo, opt)
+
+		if err != nil {
+			return 0, fmt.Errorf("リポジトリ %s/%s のプルリクエスト取得に失敗しました: %w", owner, repo, err)
+		}
+
+		// レート制限のチェックと処理
+		if err := HandleRateLimit(ctx, resp); err != nil {
+			return 0, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+		}
+
+		// 取得したPR数を追加
+		totalCount += len(pullRequests)
+
+		log.Printf("取得したプルリクエスト数: %d (累計: %d)", len(pullRequests), totalCount)
+
+		// 次のページがあるか確認（共通関数を使用）
+		paginationResult := CheckPagination(resp, len(pullRequests), opt.PerPage)
+
+		if !paginationResult.HasNextPage {
+			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d）", len(pullRequests))
+			break
+		}
+
+		// 最大ページ数チェック
+		if pageNum >= MaxPages {
+			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", MaxPages, totalCount)
+			break
+		}
+
+		// 次のページ番号を決定
+		if paginationResult.NextPageNum != 0 {
+			pageNum = paginationResult.NextPageNum - 1 // pageNum はループでインクリメントされるため -1
+		}
+	}
+
+	log.Printf("リポジトリ %s/%s のプルリクエスト数取得完了: %d 件", owner, repo, totalCount)
+	return totalCount, nil
 }

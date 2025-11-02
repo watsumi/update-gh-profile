@@ -423,6 +423,33 @@ func main() {
 		fmt.Println("\n✅ コミットごとの言語使用状況の取得テストが完了しました")
 	}
 
+	// プルリクエスト情報の取得テスト（最初の3件のリポジトリに対して）
+	if len(repos) > 0 {
+		fmt.Println("\n🔀 リポジトリのプルリクエスト情報を取得しています...")
+		testCount := 3
+		if len(repos) < testCount {
+			testCount = len(repos)
+		}
+
+		for i := 0; i < testCount; i++ {
+			repo := repos[i]
+			owner := repo.GetOwner().GetLogin()
+			repoName := repo.GetName()
+
+			fmt.Printf("\n  [%d/%d] %s/%s のプルリクエスト数を取得中...\n", i+1, testCount, owner, repoName)
+
+			prCount, err := repository.FetchPullRequests(ctx, client, owner, repoName)
+			if err != nil {
+				fmt.Printf("    ⚠️  エラー: %v\n", err)
+				continue
+			}
+
+			fmt.Printf("    ✅ プルリクエスト数: %d 件\n", prCount)
+		}
+
+		fmt.Println("\n✅ プルリクエスト情報の取得テストが完了しました")
+	}
+
 	// GitHub Actions の出力変数を設定（GITHUB_OUTPUT ファイルに書き込む）
 	if outputFile := os.Getenv("GITHUB_OUTPUT"); outputFile != "" {
 		file, err := os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

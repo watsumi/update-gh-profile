@@ -1,0 +1,57 @@
+name: 'Update GitHub Profile'
+description: 'GitHub ユーザーのリポジトリメトリクスを取得して、README.md を更新する'
+inputs:
+  github_token:
+    description: 'GitHub Personal Access Token'
+    required: false
+  username:
+    description: 'GitHub ユーザー名（デフォルト: リポジトリのオーナー）'
+    required: false
+    default: ''
+  exclude_forks:
+    description: 'フォークリポジトリを除外するかどうか（true/false）'
+    required: false
+    default: 'true'
+outputs:
+  repository_count:
+    description: '取得したリポジトリ数'
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+      shell: bash
+
+    - name: Checkout action repository
+      uses: actions/checkout@v4
+      shell: bash
+
+    - name: Download dependencies
+      shell: bash
+      run: |
+        go mod download
+
+    - name: Fetch user repositories
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token || env.GITHUB_TOKEN }}
+      shell: bash
+      run: |
+        echo "::group::リポジトリ一覧を取得"
+        export GITHUB_TOKEN="${{ inputs.github_token || env.GITHUB_TOKEN }}"
+        
+        USERNAME="${{ inputs.username }}"
+        if [ -z "$USERNAME" ]; then
+          USERNAME="${{ github.repository_owner }}"
+        fi
+        
+        EXCLUDE_FORKS="${{ inputs.exclude_forks }}"
+        if [ -z "$EXCLUDE_FORKS" ]; then
+          EXCLUDE_FORKS="true"
+        fi
+        
+        # リポジトリ一覧を取得（出力はGoプログラム内で設定される）
+        go run ./cmd/update-gh-profile/main.go --username="$USERNAME" --exclude-forks="$EXCLUDE_FORKS" || exit 1
+        echo "::endgroup::"
+

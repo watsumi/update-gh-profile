@@ -36,7 +36,23 @@ go build -o update-gh-profile cmd/update-gh-profile/main.go
 
 ### GitHub Actions での使用
 
-`.github/workflows/update-readme.yml` を参照してください（今後実装予定）
+このリポジトリを別のリポジトリの GitHub Actions ワークフローで使用できます。
+
+詳細は以下を参照してください：
+- [README_ACTION.md](README_ACTION.md) - 基本的な使用手順
+- [USAGE_ACTION.md](USAGE_ACTION.md) - 詳細な使用例
+- [PRIVATE_REPO_SETUP.md](PRIVATE_REPO_SETUP.md) - プライベートリポジトリでの設定手順
+
+#### クイックスタート
+
+```yaml
+- uses: watsumi/update-gh-profile@main
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  with:
+    username: ${{ github.repository_owner }}
+    exclude_forks: "true"
+```
 
 ## プロジェクト構成
 

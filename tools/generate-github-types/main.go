@@ -79,18 +79,18 @@ func main() {
 		// GitHub公式からダウンロードを試みる
 		err := downloadSchemaFromGitHubDocs(ctx, schemaPath)
 		if err != nil {
-			if schemaPath == defaultSchemaPath {
-				fmt.Fprintf(os.Stderr, "エラー: スキーマファイルのダウンロードに失敗しました\n")
+			// ローカルのファイルが存在する場合はそれを使用
+			if _, statErr := os.Stat(schemaPath); statErr == nil {
+				fmt.Printf("⚠️  最新版の取得に失敗したため、既存のファイルを使用します: %s\n", schemaPath)
+			} else if schemaPath == defaultSchemaPath {
+				fmt.Fprintf(os.Stderr, "エラー: スキーマファイルのダウンロードに失敗し、ローカルファイルも見つかりません\n")
 				fmt.Fprintf(os.Stderr, "Usage: %s [schema.docs.graphql] [--download] [--output <dir>]\n", os.Args[0])
 				fmt.Fprintf(os.Stderr, "  または、ローカルの schema.docs.graphql ファイルを指定してください\n")
 				os.Exit(1)
-			}
-			// 指定されたファイルパスが存在する場合は、それを使用
-			if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
+			} else {
 				fmt.Fprintf(os.Stderr, "エラー: スキーマファイルが見つかりません: %s\n", schemaPath)
 				os.Exit(1)
 			}
-			fmt.Printf("⚠️  最新版の取得に失敗したため、既存のファイルを使用します: %s\n", schemaPath)
 		} else {
 			fmt.Printf("✅ 最新のスキーマファイルを取得しました: %s\n", schemaPath)
 		}

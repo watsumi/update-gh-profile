@@ -211,9 +211,14 @@ func downloadSchemaFromGitHubDocs(ctx context.Context, outputPath string) error 
 	// GitHub公式ドキュメントリポジトリのスキーマファイルURL
 	// 複数の候補URLを試行
 	schemaURLs := []string{
+		// GitHub公式ドキュメントサイトから直接取得（推奨）
+		"https://docs.github.com/public/fpt/schema.docs.graphql",
+		// フォールバックURL
+		"https://docs.github.com/public/schema.docs.graphql",
+		// GitHub公式ドキュメントリポジトリのスキーマ
+		"https://raw.githubusercontent.com/github/docs/main/data/graphql/schema.docs.graphql",
 		"https://raw.githubusercontent.com/github/docs/main/content/graphql/reference/schema.docs.graphql",
 		"https://raw.githubusercontent.com/github/docs/main/content/graphql/schema.docs.graphql",
-		// GitHub公式APIドキュメントのスキーマ（イントロスペクション経由で取得可能な場合）
 	}
 
 	client := &http.Client{
@@ -254,6 +259,7 @@ func downloadSchemaFromGitHubDocs(ctx context.Context, outputPath string) error 
 		fmt.Printf("⚠️  スキーマファイルのダウンロードに失敗しました\n")
 		fmt.Println("   ローカルの schema.docs.graphql を使用するか、手動でダウンロードしてください")
 		fmt.Println("   参考: https://docs.github.com/en/graphql/overview/public-schema")
+		fmt.Println("   手動ダウンロード: curl -o schema.docs.graphql https://docs.github.com/public/schema.docs.graphql")
 		return fmt.Errorf("スキーマファイルをダウンロードできませんでした: %w", lastErr)
 	}
 	defer resp.Body.Close()

@@ -7,6 +7,7 @@
 
 # Compiled binaries
 update-gh-profile
+generate-github-types
 
 # docs
 schema.docs.graphql

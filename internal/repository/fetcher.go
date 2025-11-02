@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v56/github"
@@ -340,6 +342,197 @@ func FetchCommitTimeDistribution(ctx context.Context, client *github.Client, own
 
 	log.Printf("リポジトリ %s/%s のコミット時間帯分布集計完了: %d 時間帯", owner, repo, len(distribution))
 	return distribution, nil
+}
+
+// detectLanguageFromFilename ファイル名から言語を判定する
+//
+// Preconditions:
+// - filename が有効なファイルパスであること
+//
+// Postconditions:
+// - 言語名を返す（判定できない場合は空文字列）
+//
+// Invariants:
+// - 拡張子とファイル名から言語を判定する
+func detectLanguageFromFilename(filename string) string {
+	if filename == "" {
+		return ""
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	filenameLower := strings.ToLower(filepath.Base(filename))
+
+	// 拡張子と言語のマッピング
+	extToLang := map[string]string{
+		".go":      "Go",
+		".py":      "Python",
+		".js":      "JavaScript",
+		".ts":      "TypeScript",
+		".tsx":     "TypeScript",
+		".jsx":     "JavaScript",
+		".java":    "Java",
+		".kt":      "Kotlin",
+		".scala":   "Scala",
+		".clj":     "Clojure",
+		".cljs":    "Clojure",
+		".cpp":     "C++",
+		".cc":      "C++",
+		".cxx":     "C++",
+		".c":       "C",
+		".h":       "C",
+		".hpp":     "C++",
+		".cs":      "C#",
+		".php":     "PHP",
+		".rb":      "Ruby",
+		".swift":   "Swift",
+		".dart":    "Dart",
+		".rs":      "Rust",
+		".cr":      "Crystal",
+		".ex":      "Elixir",
+		".exs":     "Elixir",
+		".erl":     "Erlang",
+		".hrl":     "Erlang",
+		".lua":     "Lua",
+		".r":       "R",
+		".sql":     "SQL",
+		".sh":      "Shell",
+		".bash":    "Shell",
+		".zsh":     "Shell",
+		".fish":    "Shell",
+		".ps1":     "PowerShell",
+		".psm1":    "PowerShell",
+		".html":    "HTML",
+		".htm":     "HTML",
+		".css":     "CSS",
+		".scss":    "SCSS",
+		".sass":    "Sass",
+		".less":    "Less",
+		".xml":     "XML",
+		".json":    "JSON",
+		".yaml":    "YAML",
+		".yml":     "YAML",
+		".toml":    "TOML",
+		".ini":     "INI",
+		".md":      "Markdown",
+		".tex":     "LaTeX",
+		".rkt":     "Racket",
+		".ml":      "OCaml",
+		".fs":      "F#",
+		".fsx":     "F#",
+		".vb":      "Visual Basic",
+		".hs":      "Haskell",
+		".lhs":     "Haskell",
+		".jl":      "Julia",
+		".pl":      "Perl",
+		".pm":      "Perl",
+		".nim":     "Nim",
+		".zig":     "Zig",
+		".v":       "V",
+		".dockerfile": "Dockerfile",
+		".makefile":   "Makefile",
+		".make":       "Makefile",
+	}
+
+	// 拡張子から判定
+	if lang, ok := extToLang[ext]; ok {
+		return lang
+	}
+
+	// ファイル名から判定（Dockerfile, Makefile など）
+	if lang, ok := extToLang[filenameLower]; ok {
+		return lang
+	}
+
+	// 特殊なファイル名パターン
+	if strings.HasPrefix(filenameLower, "dockerfile") {
+		return "Dockerfile"
+	}
+	if strings.HasPrefix(filenameLower, "makefile") {
+		return "Makefile"
+	}
+
+	return ""
+}
+
+// FetchCommitLanguages 指定されたリポジトリのコミットごとの使用言語を取得する
+//
+// Preconditions:
+// - owner と repo が有効なリポジトリ識別子であること
+// - client が有効な GitHub クライアントであること
+//
+// Postconditions:
+// - 返される map は map[string]map[string]int{コミットSHA: {言語名: 出現回数}} の形式である
+// - 各コミットに対して、変更されたファイルから言語を抽出する
+//
+// Invariants:
+// - 各コミットの変更ファイルから言語を抽出する
+// - 言語名は大文字小文字を区別する（Go, Python など）
+func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, repo string) (map[string]map[string]int, error) {
+	if owner == "" || repo == "" {
+		return nil, fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+	}
+
+	log.Printf("リポジトリ %s/%s のコミットごとの言語使用状況を取得しています...", owner, repo)
+
+	// まずコミット一覧を取得
+	commits, err := FetchCommits(ctx, client, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+
+	// コミットごとの言語使用状況を格納する map
+	// map[コミットSHA]map[言語名]出現回数
+	commitLanguages := make(map[string]map[string]int)
+
+	// 各コミットの詳細情報を取得（変更ファイル情報を含む）
+	maxCommits := 100 // パフォーマンスを考慮して、最大100コミットまで処理
+	if len(commits) < maxCommits {
+		maxCommits = len(commits)
+	}
+
+	log.Printf("コミットごとの言語情報を取得中: %d 件のコミットを処理します", maxCommits)
+
+	for i := 0; i < maxCommits; i++ {
+		commit := commits[i]
+		sha := commit.GetSHA()
+
+		// コミットの詳細情報を取得（変更ファイル情報を含む）
+		commitDetail, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, &github.ListOptions{})
+		if err != nil {
+			log.Printf("警告: コミット %s の詳細取得に失敗しました: %v", sha[:7], err)
+			continue
+		}
+
+		// レート制限のチェックと処理
+		if err := handleRateLimit(ctx, resp); err != nil {
+			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+		}
+
+		// このコミットで使用された言語を集計
+		langs := make(map[string]int)
+
+		if commitDetail.Files != nil {
+			for _, file := range commitDetail.Files {
+				// ファイル名から言語を判定
+				lang := detectLanguageFromFilename(file.GetFilename())
+				if lang != "" {
+					langs[lang]++
+				}
+			}
+		}
+
+		if len(langs) > 0 {
+			commitLanguages[sha] = langs
+		}
+
+		// 進捗をログに出力（10コミットごと）
+		if (i+1)%10 == 0 {
+			log.Printf("進捗: %d/%d コミットを処理しました", i+1, maxCommits)
+		}
+	}
+
+	log.Printf("リポジトリ %s/%s のコミットごとの言語使用状況取得完了: %d コミット", owner, repo, len(commitLanguages))
+	return commitLanguages, nil
 }
 
 // handleRateLimit API レート制限を検出し、適切に待機する

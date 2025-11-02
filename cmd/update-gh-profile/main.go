@@ -324,6 +324,105 @@ func main() {
 		fmt.Println("\n✅ コミット情報の取得テストが完了しました")
 	}
 
+	// コミットごとの言語使用状況の取得テスト（最初の1件のリポジトリに対して、最初の10コミットのみ）
+	if len(repos) > 0 {
+		fmt.Println("\n🔍 コミットごとの言語使用状況を取得しています...")
+		repo := repos[0]
+		owner := repo.GetOwner().GetLogin()
+		repoName := repo.GetName()
+
+		fmt.Printf("\n  [1/1] %s/%s のコミットごとの言語使用状況を取得中（最初の10コミットのみ）...\n", owner, repoName)
+
+		commitLanguages, err := repository.FetchCommitLanguages(ctx, client, owner, repoName)
+		if err != nil {
+			fmt.Printf("    ⚠️  エラー: %v\n", err)
+		} else {
+			fmt.Printf("    ✅ 処理完了: %d コミット分の言語情報を取得しました\n", len(commitLanguages))
+
+			// 最初の5コミット分の言語使用状況を表示
+			maxCommitDisplay := 5
+			count := 0
+			for sha, langs := range commitLanguages {
+				if count >= maxCommitDisplay {
+					break
+				}
+				fmt.Printf("\n    📝 コミット %s で使用された言語:\n", sha[:7])
+				if len(langs) == 0 {
+					fmt.Printf("      ℹ️  言語情報なし\n")
+				} else {
+					// 言語を出現回数でソート
+					type langCount struct {
+						lang  string
+						count int
+					}
+					var langList []langCount
+					for lang, cnt := range langs {
+						langList = append(langList, langCount{lang: lang, count: cnt})
+					}
+
+					// 出現回数でソート（降順）
+					for i := 0; i < len(langList)-1; i++ {
+						for j := i + 1; j < len(langList); j++ {
+							if langList[i].count < langList[j].count {
+								langList[i], langList[j] = langList[j], langList[i]
+							}
+						}
+					}
+
+					for _, item := range langList {
+						fmt.Printf("      - %s: %d ファイル\n", item.lang, item.count)
+					}
+				}
+				count++
+			}
+			if len(commitLanguages) > maxCommitDisplay {
+				fmt.Printf("\n    ... 他 %d コミット\n", len(commitLanguages)-maxCommitDisplay)
+			}
+
+			// 全コミットを通しての言語使用回数（Top5）を集計
+			allLangCounts := make(map[string]int)
+			for _, langs := range commitLanguages {
+				for lang, count := range langs {
+					allLangCounts[lang] += count
+				}
+			}
+
+			if len(allLangCounts) > 0 {
+				type langCount struct {
+					lang  string
+					count int
+				}
+				var langList []langCount
+				for lang, cnt := range allLangCounts {
+					langList = append(langList, langCount{lang: lang, count: cnt})
+				}
+
+				// 出現回数でソート（降順）
+				for i := 0; i < len(langList)-1; i++ {
+					for j := i + 1; j < len(langList); j++ {
+						if langList[i].count < langList[j].count {
+							langList[i], langList[j] = langList[j], langList[i]
+						}
+					}
+				}
+
+				maxLangDisplay := 5
+				if len(langList) < maxLangDisplay {
+					maxLangDisplay = len(langList)
+				}
+				if maxLangDisplay > 0 {
+					fmt.Printf("\n    📊 全コミットを通しての使用言語 Top%d:\n", maxLangDisplay)
+					for i := 0; i < maxLangDisplay; i++ {
+						item := langList[i]
+						fmt.Printf("      - %s: %d ファイル\n", item.lang, item.count)
+					}
+				}
+			}
+		}
+
+		fmt.Println("\n✅ コミットごとの言語使用状況の取得テストが完了しました")
+	}
+
 	// GitHub Actions の出力変数を設定（GITHUB_OUTPUT ファイルに書き込む）
 	if outputFile := os.Getenv("GITHUB_OUTPUT"); outputFile != "" {
 		file, err := os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

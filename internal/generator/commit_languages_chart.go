@@ -65,30 +65,41 @@ func GenerateCommitLanguagesChart(commitLanguages map[string]int) (string, error
 	// ヘッダー
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
 
-	// スタイル定義（カラーパレット）
-	colors := []string{"#58a6ff", "#1f6feb", "#6e40c9", "#ff7b72", "#f85149"}
+	// スタイル定義（より豊かなカラーパレット）
+	colors := []string{"#58a6ff", "#7c3aed", "#1f6feb", "#56d364", "#ff7b72"}
 	svg.WriteString(`  <defs>
 `)
 
 	for i, color := range colors {
-		svg.WriteString(fmt.Sprintf(`    <linearGradient id="grad%d" x1="0%%" y1="0%%" x2="0%%" y2="100%%">
+		svg.WriteString(fmt.Sprintf(`    <linearGradient id="grad%d" x1="0%%" y1="0%%" x2="100%%" y2="0%%">
       <stop offset="0%%" style="stop-color:%s;stop-opacity:1" />
-      <stop offset="100%%" style="stop-color:%s;stop-opacity:0.7" />
+      <stop offset="100%%" style="stop-color:%s;stop-opacity:0.8" />
     </linearGradient>
 `, i, color, color))
 	}
 
-	svg.WriteString(`  </defs>
+	svg.WriteString(`    <filter id="barShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
 
 `)
 
-	// 背景
-	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="8"/>
+	// 背景（ボーダー付き）
+	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="10" stroke="#30363d" stroke-width="1"/>
 `, width, height, DefaultBackgroundColor))
 
-	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Top 5 Languages by Commit</text>
-`, width/2, 35, DefaultTextColor))
+	// タイトル（装飾付き）
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="%s" text-anchor="middle">💻 Top 5 Languages by Commit</text>
+`, width/2, 37, AccentColor))
 
 	// 棒グラフを表示
 	barHeight := 30
@@ -108,13 +119,13 @@ func GenerateCommitLanguagesChart(commitLanguages map[string]int) (string, error
 
 		// バーの背景
 		barX := 140
-		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="#21262d" rx="4"/>
+		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="#161b22" rx="6" stroke="#30363d" stroke-width="1"/>
 `, barX, yPos-12, barMaxWidth, barHeight))
 
-		// バー（グラデーション）
+		// バー（グラデーション + シャドウ）
 		if barWidth > 0 {
 			colorIndex := i % len(colors)
-			svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="url(#grad%d)" rx="4"/>
+			svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="url(#grad%d)" rx="6" filter="url(#barShadow)" opacity="0.95"/>
 `, barX, yPos-12, barWidth, barHeight, colorIndex))
 		}
 

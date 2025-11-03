@@ -49,23 +49,35 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 	// ヘッダー
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, chartHeight, width, chartHeight))
 
-	// スタイル定義
+	// スタイル定義（モダンなグラデーションとシャドウ）
 	svg.WriteString(`  <defs>
     <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#1f6feb;stop-opacity:1" />
     </linearGradient>
+    <filter id="shadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
 `)
 
-	// 背景
-	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="8"/>
+	// 背景（ボーダー付き）
+	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="10" stroke="#30363d" stroke-width="1"/>
 `, width, chartHeight, DefaultBackgroundColor))
 
-	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s">Language Ranking</text>
-`, width/2, 28, DefaultTextColor))
+	// タイトル（装飾付き）
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="%s" text-anchor="middle" filter="url(#shadow)">🗂️ Language Ranking</text>
+`, width/2, 32, AccentColor))
 
 	// ランキング項目を表示
 	yPos := titleHeight + 10
@@ -88,13 +100,13 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 		barY := yPos - 12
 		barHeight := 18
 
-		// バーの背景
-		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="#21262d" rx="4"/>
+		// バーの背景（グロー効果付き）
+		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="#161b22" rx="6" stroke="#30363d" stroke-width="1"/>
 `, barX, barY, width-150, barHeight))
 
-		// バー（グラデーション）
+		// バー（グラデーション + グロー効果）
 		if barWidth > 0 {
-			svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="url(#grad)" rx="4"/>
+			svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="url(#grad)" rx="6" opacity="0.9" filter="url(#shadow)"/>
 `, barX, barY, barWidth, barHeight))
 		}
 

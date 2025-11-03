@@ -33,8 +33,51 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 	// ヘッダー
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
 
-	// 背景
-	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="8"/>
+	// スタイル定義
+	svg.WriteString(`  <defs>
+    <filter id="cardShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="iconShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#161b22;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d1117;stop-opacity:1" />
+    </linearGradient>
+`)
+
+	// 各カード用のグラデーション定義
+	for i := 0; i < 4; i++ {
+		svg.WriteString(fmt.Sprintf(`    <linearGradient id="cardGrad%d" x1="0%%" y1="0%%" x2="100%%" y2="100%%">
+      <stop offset="0%%" style="stop-color:%s;stop-opacity:0.15" />
+      <stop offset="100%%" style="stop-color:%s;stop-opacity:0.05" />
+    </linearGradient>
+`, i, []string{"#ffd700", "#58a6ff", "#56d364", "#a371f7"}[i], []string{"#ffd700", "#58a6ff", "#56d364", "#a371f7"}[i]))
+	}
+
+	svg.WriteString(`  </defs>
+
+`)
+
+	// 背景（グラデーション + ボーダー）
+	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="url(#cardGrad)" rx="12" stroke="#30363d" stroke-width="1"/>
 `, width, height, DefaultBackgroundColor))
 
 	// タイトル（省略可能、カードだけでも見やすい）
@@ -87,18 +130,14 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 	for i, m := range metrics {
 		cardX := startX + i*(cardWidth+cardSpacing)
 
-		// カードの背景（軽いグロー効果）
-		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="6" opacity="0.1"/>
-`, cardX, cardY, cardWidth, height-cardY-padding, m.color))
+		// カードの背景（グラデーション + シャドウ）
+		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="url(#cardGrad%d)" rx="8" stroke="%s" stroke-width="1.5" opacity="0.8" filter="url(#cardShadow)"/>
+`, cardX, cardY, cardWidth, height-cardY-padding, i, m.color))
 
-		// カードの枠線
-		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="none" stroke="%s" stroke-width="1" rx="6" opacity="0.3"/>
-`, cardX, cardY, cardWidth, height-cardY-padding, m.color))
-
-		// アイコン
+		// アイコン（大きめ + グロー効果）
 		iconX := cardX + cardWidth/2
-		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif" font-size="%d" text-anchor="middle">%s</text>
-`, iconX, iconY, iconSize, m.icon))
+		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif" font-size="%d" text-anchor="middle" filter="url(#iconShadow)">%s</text>
+`, iconX, iconY, iconSize+2, m.icon))
 
 		// 数値（大きなフォント）
 		valueText := formatNumber(m.value)

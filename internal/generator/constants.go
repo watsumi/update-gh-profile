@@ -24,4 +24,19 @@ const (
 
 	// DefaultTextColor デフォルトのテキスト色
 	DefaultTextColor = "#c9d1d9"
+
+	// AccentColor アクセントカラー（メイン）
+	AccentColor = "#58a6ff"
+
+	// AccentColorDark アクセントカラー（ダーク）
+	AccentColorDark = "#1f6feb"
+
+	// SecondaryColor セカンダリカラー
+	SecondaryColor = "#7c3aed"
+
+	// SuccessColor 成功色
+	SuccessColor = "#56d364"
+
+	// WarningColor 警告色
+	WarningColor = "#f85149"
 )

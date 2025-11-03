@@ -65,19 +65,27 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 	svg.WriteString(`  <defs>
     <linearGradient id="timeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#1f6feb;stop-opacity:0.8" />
     </linearGradient>
+    <filter id="barGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
 `)
 
-	// 背景
-	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="8"/>
+	// 背景（ボーダー付き）
+	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="10" stroke="#30363d" stroke-width="1"/>
 `, width, height, DefaultBackgroundColor))
 
-	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Commit Time Distribution (UTC)</text>
-`, width/2, 35, DefaultTextColor))
+	// タイトル（装飾付き）
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="%s" text-anchor="middle">🕐 Commit Time Distribution (UTC)</text>
+`, width/2, 37, AccentColor))
 
 	// ヒートマップ形式で表示
 	barWidth := float64(chartWidth) / 24.0
@@ -118,7 +126,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 
 		y := float64(height-padding) - barHeightScaled
 
-		svg.WriteString(fmt.Sprintf(`  <rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s" rx="2"/>
+		svg.WriteString(fmt.Sprintf(`  <rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s" rx="3" filter="url(#barGlow)" opacity="0.9"/>
 `, x+1, y, barWidth-2, barHeightScaled, baseColor))
 
 		// 時間帯ラベル（6時間ごと）

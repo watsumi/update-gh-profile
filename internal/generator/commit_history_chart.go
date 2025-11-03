@@ -61,23 +61,31 @@ func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 	// ヘッダー
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
 
-	// スタイル定義
+	// スタイル定義（より豊かなグラデーション）
 	svg.WriteString(`  <defs>
     <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:0.3" />
+      <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:0.4" />
+      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:0.2" />
       <stop offset="100%" style="stop-color:#58a6ff;stop-opacity:0" />
     </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
 `)
 
-	// 背景
-	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="8"/>
+	// 背景（ボーダー付き）
+	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="10" stroke="#30363d" stroke-width="1"/>
 `, width, height, DefaultBackgroundColor))
 
-	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Commit History</text>
-`, width/2, 30, DefaultTextColor))
+	// タイトル（装飾付き）
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="%s" text-anchor="middle">📈 Commit History</text>
+`, width/2, 32, AccentColor))
 
 	// Y軸のグリッド線とラベル
 	gridLines := 5
@@ -132,10 +140,10 @@ func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 	}
 	areaPath.WriteString(fmt.Sprintf("L %d %d Z", width-padding, padding+chartHeight))
 
-	svg.WriteString(fmt.Sprintf(`  <path d="%s" fill="url(#areaGrad)" opacity="0.5"/>
+	svg.WriteString(fmt.Sprintf(`  <path d="%s" fill="url(#areaGrad)" opacity="0.6"/>
 `, areaPath.String()))
 
-	// 折れ線グラフのパス
+	// 折れ線グラフのパス（太め + グロー効果）
 	var linePath strings.Builder
 	for i, p := range points {
 		if i == 0 {
@@ -145,12 +153,12 @@ func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 		}
 	}
 
-	svg.WriteString(fmt.Sprintf(`  <path d="%s" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+	svg.WriteString(fmt.Sprintf(`  <path d="%s" fill="none" stroke="#58a6ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
 `, linePath.String()))
 
-	// データポイント（円）
+	// データポイント（円、大きめ + グロー効果）
 	for _, p := range points {
-		svg.WriteString(fmt.Sprintf(`  <circle cx="%.1f" cy="%.1f" r="3" fill="#58a6ff" stroke="%s" stroke-width="1"/>
+		svg.WriteString(fmt.Sprintf(`  <circle cx="%.1f" cy="%.1f" r="4" fill="#58a6ff" stroke="%s" stroke-width="2" filter="url(#glow)"/>
 `, p.X, p.Y, DefaultBackgroundColor))
 	}
 

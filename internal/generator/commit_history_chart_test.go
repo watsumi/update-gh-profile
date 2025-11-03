@@ -22,11 +22,10 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 				"2024-01-05": 12,
 			},
 			wantContains: []string{
-				"コミット推移",
+				"Commit History",
 				"01/01", // MM/DD形式のラベル
 				"<svg",
-				"<path",
-				"<circle",
+				"<rect", // 棒グラフに変更されたため
 			},
 			wantNotContains: []string{},
 		},
@@ -34,8 +33,8 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 			name:          "空のデータ",
 			commitHistory: map[string]int{},
 			wantContains: []string{
-				"コミット推移",
-				"データがありません",
+				"Commit History",
+				"No data available",
 			},
 			wantNotContains: []string{},
 		},
@@ -45,7 +44,7 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 				"2024-01-01": 10,
 			},
 			wantContains: []string{
-				"コミット推移",
+				"Commit History",
 				"01/01", // MM/DD形式のラベル
 				"<svg",
 			},

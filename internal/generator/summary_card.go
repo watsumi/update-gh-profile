@@ -78,7 +78,7 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 
 	// 背景（グラデーション + ボーダー）
 	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="url(#cardGrad)" rx="12" stroke="#30363d" stroke-width="1"/>
-`, width, height, DefaultBackgroundColor))
+`, width, height))
 
 	// タイトル（省略可能、カードだけでも見やすい）
 	// svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">統計サマリー</text>

@@ -23,14 +23,14 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 				"C++":        10, // 6番目（表示されない）
 			},
 			wantContains: []string{
-				"コミットごとの使用言語Top5",
+				"Top 5 Languages by Commit",
 				"Go",
 				"Python",
 				"TypeScript",
 				"JavaScript",
 				"Rust",
-				"100 ファイル",
-				"80 ファイル",
+				"100 files",
+				"80 files",
 				"<svg",
 			},
 			wantNotContains: []string{
@@ -41,8 +41,8 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 			name:            "空のデータ",
 			commitLanguages: map[string]int{},
 			wantContains: []string{
-				"コミットごとの使用言語Top5",
-				"データがありません",
+				"Top 5 Languages by Commit",
+				"No data available",
 			},
 			wantNotContains: []string{},
 		},
@@ -55,8 +55,8 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 			wantContains: []string{
 				"Go",
 				"Python",
-				"50 ファイル",
-				"30 ファイル",
+				"50 files",
+				"30 files",
 			},
 			wantNotContains: []string{},
 		},

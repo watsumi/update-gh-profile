@@ -25,7 +25,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 			},
 			maxItems: 5,
 			wantContains: []string{
-				"言語ランキング",
+				"Language Ranking",
 				"Go",
 				"Python",
 				"JavaScript",
@@ -40,8 +40,8 @@ func TestGenerateLanguageChart(t *testing.T) {
 			rankedLanguages: []aggregator.LanguageStat{},
 			maxItems:        5,
 			wantContains: []string{
-				"言語ランキング",
-				"データがありません",
+				"Language Ranking",
+				"No data available",
 			},
 			wantNotContains: []string{},
 		},

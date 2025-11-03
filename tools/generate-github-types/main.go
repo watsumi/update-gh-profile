@@ -165,9 +165,11 @@ func parseSchema(path string) (map[string]TypeDefinition, error) {
 
 		// 型定義の中にあるフィールドを抽出
 		if inTypeDefinition && currentType != nil {
-			if trimmed == "}" || trimmed == "}" {
-				inTypeDefinition = false
-				currentType = nil
+			if trimmed == "{" || trimmed == "}" {
+				if trimmed == "}" {
+					inTypeDefinition = false
+					currentType = nil
+				}
 				continue
 			}
 

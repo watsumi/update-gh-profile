@@ -32,8 +32,8 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 	titleHeight := 40
 
 	// Pie chart settings
-	// Center X is positioned at 35% of width to leave space for legend on the right
-	centerX := float64(width) * 0.35
+	// Center X is positioned at 75% of width to leave space for legend on the left
+	centerX := float64(width) * 0.75
 	centerY := float64(titleHeight) + (float64(height-titleHeight-padding) / 2.0)
 	radius := 90.0 // Radius of the pie chart
 
@@ -126,10 +126,11 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 		}
 	}
 
-	// Draw legend and labels on the right side
-	legendX := int(float64(width) * 0.65) // Start legend at 65% of width
+	// Draw legend and labels on the left side
+	legendX := padding // Start legend near the left padding
 	legendY := titleHeight + 25
 	legendItemHeight := 22
+	legendRightX := (width / 2) - padding
 
 	// Draw legend items for all languages
 	for i, lang := range rankedLanguages {
@@ -159,7 +160,7 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 		}
 		percentageText := fmt.Sprintf("%.1f%%", percentage)
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s" font-weight="600" text-anchor="end">%s</text>
-`, width-padding, y, AccentColor, percentageText))
+`, legendRightX, y, AccentColor, percentageText))
 	}
 
 	// If there are more than 15 languages, show count

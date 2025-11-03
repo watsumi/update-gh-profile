@@ -1,0 +1,97 @@
+# Update GH Profile
+
+GitHub ユーザーのリポジトリメトリクスを自動分析し、README.md を更新する GitHub Actions ワークフロー
+
+## 概要
+
+このツールは、GitHub ユーザーの全リポジトリから以下の情報を収集し、可視化します：
+
+- 使用言語ランキング
+- コミット推移グラフ
+- コミット時間帯分析
+- コミットごとの使用言語 Top5
+- サマリーカード（スター数、リポジトリ数、コミット数、PR 数）
+
+## セットアップ
+
+### 必要な環境
+
+- Go 1.21 以上
+- GitHub Personal Access Token (環境変数 `GITHUB_TOKEN`)
+
+### ローカル実行
+
+```bash
+# 依存関係のインストール
+go mod download
+
+# 実行
+export GITHUB_TOKEN=your_token_here
+go run cmd/update-gh-profile/main.go
+
+# または、ビルドして実行
+go build -o update-gh-profile cmd/update-gh-profile/main.go
+./update-gh-profile
+```
+
+### GitHub Actions での使用
+
+このリポジトリを別のリポジトリの GitHub Actions ワークフローで使用できます。
+
+詳細は以下を参照してください：
+
+- [README_ACTION.md](README_ACTION.md) - 基本的な使用手順
+- [USAGE_ACTION.md](USAGE_ACTION.md) - 詳細な使用例
+- [PRIVATE_REPO_SETUP.md](PRIVATE_REPO_SETUP.md) - プライベートリポジトリでの設定手順
+
+#### クイックスタート
+
+```yaml
+- uses: watsumi/update-gh-profile@main
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    exclude_forks: "true"
+```
+
+#### Workflow の設定例
+
+プロフィールリポジトリ（`username/username` 形式のリポジトリ）で使用する場合の完全な workflow ファイル例：
+
+```yaml
+name: Update GitHub Profile
+
+on:
+  schedule:
+    # 毎日 00:00 UTC（日本時間 09:00）に実行
+    - cron: "0 0 * * *"
+  workflow_dispatch: # 手動実行も可能
+
+permissions:
+  contents: write # README.md を更新するために必要
+
+jobs:
+  update-profile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update GitHub Profile
+        uses: watsumi/update-gh-profile@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          exclude_forks: "true"
+          exclude_languages: "HTML,CSS,JSON" # 除外する言語名（カンマ区切り）
+        # 注意: このアクションは内部で自動的にコミットとプッシュを実行します
+        # permissions: contents: write により認証情報が自動的に設定されるため、
+        # github_token_write は不要です
+```
+
+**注意事項:**
+
+- **`permissions: contents: write` について**: この権限設定により `secrets.GITHUB_TOKEN` に書き込み権限が付与され、`actions/checkout@v4` でチェックアウトされたリポジトリに対して `git push` が自動的に認証されます。そのため、`github_token_write` パラメーターは不要です（削除されました）。
+- **自動コミット・プッシュ**: このアクションは README.md を更新した後、自動的にコミットとプッシュを実行します。追加のステップは不要です。
+- **トークンの設定**: `github_token` には `secrets.GITHUB_TOKEN` を渡してください。プライベートリポジトリを読み取る場合は、より広範囲な権限を持つ Personal Access Token を `github_token` に設定してください。
+- **認証ユーザーの自動取得**: このツールは認証ユーザー自身のリポジトリのみを取得します。認証ユーザーは自動的に取得されるため、ユーザー名の指定は不要です。
+- **フォークの除外**: `exclude_forks: "true"` を設定すると、フォークされたリポジトリは統計から除外されます。
+- **言語の除外**: `exclude_languages` パラメーターでランキングから除外する言語を指定できます。カンマ区切りで複数の言語を指定可能です（例: `"HTML,CSS,JSON"`）。大文字小文字は区別されません。

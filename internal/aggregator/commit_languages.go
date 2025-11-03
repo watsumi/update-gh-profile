@@ -3,6 +3,7 @@ package aggregator
 import (
 	"log"
 	"sort"
+	"strings"
 )
 
 // AggregateCommitLanguages コミットごとの使用言語Top5を集計する
@@ -10,15 +11,27 @@ import (
 // Preconditions:
 //   - commitLanguages が map[string]map[string]map[string]int{リポジトリ名: {コミットSHA: {言語名: 出現回数}}} の形式であること
 //     または map[string]map[string]int{コミットSHA: {言語名: 出現回数}} の形式であること
+//   - excludedLanguages が除外する言語名のスライスであること（空でも可）
 //
 // Postconditions:
-// - 返される map は map[string]int{言語名: 使用回数} の形式で、Top5のみを含む
+// - 返される map は map[string]int{言語名: 使用回数} の形式で、Top5のみを含む（除外言語を除く）
 // - 使用回数が多い順にソートされている
 //
 // Invariants:
 // - 使用回数が多い順にソートされ、上位5つが返される
-func AggregateCommitLanguages(commitLanguages map[string]map[string]int) map[string]int {
+// - 除外言語は集計から除外される
+func AggregateCommitLanguages(commitLanguages map[string]map[string]int, excludedLanguages []string) map[string]int {
 	log.Printf("コミットごとの言語使用状況の集計を開始: %d コミット", len(commitLanguages))
+
+	// 除外リストを大文字小文字を区別しない比較のためにmapに変換
+	excludedMap := make(map[string]bool)
+	for _, lang := range excludedLanguages {
+		// 空白を削除し、大文字小文字を区別しない比較のために小文字に変換
+		normalized := strings.TrimSpace(strings.ToLower(lang))
+		if normalized != "" {
+			excludedMap[normalized] = true
+		}
+	}
 
 	// 言語ごとの使用回数を集計する map
 	languageCounts := make(map[string]int)
@@ -32,6 +45,11 @@ func AggregateCommitLanguages(commitLanguages map[string]map[string]int) map[str
 		}
 		log.Printf("  コミット %s: %d 言語を使用", shaDisplay, len(langs))
 		for lang, count := range langs {
+			// 除外言語をスキップ
+			normalized := strings.ToLower(lang)
+			if excludedMap[normalized] {
+				continue
+			}
 			languageCounts[lang] += count
 		}
 	}

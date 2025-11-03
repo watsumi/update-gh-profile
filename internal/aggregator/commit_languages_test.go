@@ -6,10 +6,12 @@ import (
 
 func TestAggregateCommitLanguages(t *testing.T) {
 	tests := []struct {
-		name            string
-		commitLanguages map[string]map[string]int
-		wantCount       int
-		wantTop5        []string
+		name              string
+		commitLanguages   map[string]map[string]int
+		excludedLanguages []string
+		wantCount         int
+		wantTop5          []string
+		wantNotContains   []string
 	}{
 		{
 			name: "正常系: 複数言語、複数コミット",
@@ -30,14 +32,18 @@ func TestAggregateCommitLanguages(t *testing.T) {
 					"Python": 1,
 				},
 			},
-			wantCount: 5,
-			wantTop5:  []string{"Go", "Python", "TypeScript", "JavaScript", "Rust"},
+			excludedLanguages: []string{},
+			wantCount:         5,
+			wantTop5:          []string{"Go", "Python", "TypeScript", "JavaScript", "Rust"},
+			wantNotContains:   []string{},
 		},
 		{
-			name:            "空のmap",
-			commitLanguages: map[string]map[string]int{},
-			wantCount:       0,
-			wantTop5:        []string{},
+			name:              "空のmap",
+			commitLanguages:   map[string]map[string]int{},
+			excludedLanguages: []string{},
+			wantCount:         0,
+			wantTop5:          []string{},
+			wantNotContains:   []string{},
 		},
 		{
 			name: "言語数が5未満",
@@ -47,8 +53,10 @@ func TestAggregateCommitLanguages(t *testing.T) {
 					"Python": 3,
 				},
 			},
-			wantCount: 2,
-			wantTop5:  []string{"Go", "Python"},
+			excludedLanguages: []string{},
+			wantCount:         2,
+			wantTop5:          []string{"Go", "Python"},
+			wantNotContains:   []string{},
 		},
 		{
 			name: "同じ使用回数の言語",
@@ -61,14 +69,32 @@ func TestAggregateCommitLanguages(t *testing.T) {
 					"C++":    3,
 				},
 			},
-			wantCount: 5,
-			wantTop5:  []string{"C++", "Go", "Java", "Python", "Rust"}, // 使用回数が同じ場合は辞書順
+			excludedLanguages: []string{},
+			wantCount:         5,
+			wantTop5:          []string{"C++", "Go", "Java", "Python", "Rust"}, // 使用回数が同じ場合は辞書順
+			wantNotContains:   []string{},
+		},
+		{
+			name: "除外言語が設定されている場合",
+			commitLanguages: map[string]map[string]int{
+				"sha1": {
+					"Go":         5,
+					"Python":     3,
+					"JavaScript": 2,
+					"HTML":       10,
+					"CSS":        8,
+				},
+			},
+			excludedLanguages: []string{"HTML", "CSS"},
+			wantCount:         3,
+			wantTop5:          []string{"Go", "Python", "JavaScript"},
+			wantNotContains:   []string{"HTML", "CSS"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := AggregateCommitLanguages(tt.commitLanguages)
+			result := AggregateCommitLanguages(tt.commitLanguages, tt.excludedLanguages)
 
 			if len(result) != tt.wantCount {
 				t.Errorf("AggregateCommitLanguages() count = %d, want %d", len(result), tt.wantCount)
@@ -113,6 +139,13 @@ func TestAggregateCommitLanguages(t *testing.T) {
 				if langList[i-1].count < langList[i].count {
 					t.Errorf("AggregateCommitLanguages() not sorted correctly: %d < %d",
 						langList[i-1].count, langList[i].count)
+				}
+			}
+
+			// 除外された言語が含まれていないことを確認
+			for _, notWant := range tt.wantNotContains {
+				if _, ok := result[notWant]; ok {
+					t.Errorf("AggregateCommitLanguages() should not contain excluded language %q", notWant)
 				}
 			}
 		})

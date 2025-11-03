@@ -111,8 +111,8 @@ func Run(ctx context.Context, token string, config Config) error {
 	aggregatedTimeDist := aggregator.SortCommitTimeDistributionByHour(aggregatedTimeDistMap)
 	logger.Info("コミット時間帯の集計が完了しました: %d 時間帯", len(aggregatedTimeDist))
 
-	// コミットごとの言語Top5
-	top5Languages := aggregator.AggregateCommitLanguages(allCommitLanguages)
+	// コミットごとの言語Top5（除外言語を除く）
+	top5Languages := aggregator.AggregateCommitLanguages(allCommitLanguages, config.ExcludedLanguages)
 
 	// サマリー統計
 	var reposForSummary []*github.Repository

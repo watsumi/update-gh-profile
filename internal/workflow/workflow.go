@@ -275,7 +275,12 @@ func Run(ctx context.Context, token string, config Config) error {
 
 	repoPath := config.RepoPath
 	if repoPath == "" {
-		repoPath = "."
+		// GitHub Actions環境では GITHUB_WORKSPACE を使用
+		if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
+			repoPath = workspace
+		} else {
+			repoPath = "."
+		}
 	}
 
 	// Git リポジトリか確認

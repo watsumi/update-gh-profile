@@ -36,8 +36,9 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 	// 2. ユーザー詳細情報を取得（コミット数、PR数など）（生成された型を使用）
 	userDetails, err := repository.FetchUserDetailsWithGraphQLGenerated(ctx, token, username)
 	if err != nil {
-		logger.LogError(err, "GraphQLによるユーザー詳細情報の取得に失敗しました")
-		// エラーは致命的ではないので、続行
+		// 502 Bad Gatewayなどの一時的なエラーは警告として扱う（致命的ではない）
+		logger.Warning("GraphQLによるユーザー詳細情報の取得に失敗しました: %v（続行します）", err)
+		userDetails = nil // 明示的にnilを設定
 	}
 
 	// 3. コミット時間帯を取得（過去1年間）

@@ -32,8 +32,8 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 	titleHeight := 40
 
 	// Pie chart settings
-	// Center X is positioned at 35% of width to leave space for legend on the right
-	centerX := float64(width) * 0.35
+	// Center X is positioned at 75% of width (right half) to leave space for legend on the left
+	centerX := float64(width) * 0.75
 	centerY := float64(titleHeight) + (float64(height-titleHeight-padding) / 2.0)
 	radius := 90.0 // Radius of the pie chart
 
@@ -126,10 +126,11 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 		}
 	}
 
-	// Draw legend and labels on the right side
-	legendX := int(float64(width) * 0.65) // Start legend at 65% of width
+	// Draw legend and labels on the left side
+	legendX := padding + 10 // Start legend from left with padding
 	legendY := titleHeight + 25
 	legendItemHeight := 22
+	maxLegendWidth := int(float64(width) * 0.45) // Maximum width for legend (left half minus padding)
 
 	// Draw legend items for all languages
 	for i, lang := range rankedLanguages {
@@ -146,20 +147,21 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 
 		// Language name
 		langText := escapeXML(lang.Language)
-		if len(langText) > 15 {
-			langText = langText[:12] + "..."
+		if len(langText) > 20 {
+			langText = langText[:17] + "..."
 		}
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">%s</text>
 `, legendX+18, y, DefaultTextColor, langText))
 
-		// Percentage
+		// Percentage (right-aligned within legend area)
 		percentage := lang.Percentage
 		if totalPercentage > 0 {
 			percentage = (lang.Percentage / totalPercentage) * 100.0
 		}
 		percentageText := fmt.Sprintf("%.1f%%", percentage)
+		percentageX := legendX + maxLegendWidth - 10 // Right-align within legend area
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s" font-weight="600" text-anchor="end">%s</text>
-`, width-padding, y, AccentColor, percentageText))
+`, percentageX, y, AccentColor, percentageText))
 	}
 
 	// If there are more than 15 languages, show count

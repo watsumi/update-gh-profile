@@ -9,6 +9,70 @@ import (
 	"strings"
 )
 
+// ensureGitConfig Git の user.name と user.email を設定する
+// GitHub Actions環境では GITHUB_ACTOR 環境変数を使用
+func ensureGitConfig(repoPath string) error {
+	// user.name を確認
+	cmd := exec.Command("git", "config", "--local", "user.name")
+	cmd.Dir = repoPath
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	userNameSet := err == nil && strings.TrimSpace(stdout.String()) != ""
+
+	if !userNameSet {
+		// user.name が設定されていない場合、設定する
+		var userName string
+		if actor := os.Getenv("GITHUB_ACTOR"); actor != "" {
+			userName = actor
+		} else {
+			// フォールバック: GitHub Actions デフォルト
+			userName = "github-actions[bot]"
+		}
+
+		cmd := exec.Command("git", "config", "--local", "user.name", userName)
+		cmd.Dir = repoPath
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+		if err != nil {
+			return fmt.Errorf("user.name の設定に失敗しました: %w\nstderr: %s", err, stderr.String())
+		}
+	}
+
+	// user.email を確認
+	cmd = exec.Command("git", "config", "--local", "user.email")
+	cmd.Dir = repoPath
+	stdout.Reset()
+	stderr.Reset()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	userEmailSet := err == nil && strings.TrimSpace(stdout.String()) != ""
+
+	if !userEmailSet {
+		// user.email が設定されていない場合、設定する
+		var userEmail string
+		if actor := os.Getenv("GITHUB_ACTOR"); actor != "" {
+			// GitHub Actions の no-reply メールアドレス形式
+			userEmail = fmt.Sprintf("%s@users.noreply.github.com", actor)
+		} else {
+			// フォールバック: GitHub Actions デフォルト
+			userEmail = "github-actions[bot]@users.noreply.github.com"
+		}
+
+		cmd := exec.Command("git", "config", "--local", "user.email", userEmail)
+		cmd.Dir = repoPath
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+		if err != nil {
+			return fmt.Errorf("user.email の設定に失敗しました: %w\nstderr: %s", err, stderr.String())
+		}
+	}
+
+	return nil
+}
+
 // DetectChanges 変更されたファイルを検出する
 //
 // Preconditions:
@@ -100,6 +164,13 @@ func HasChanges(repoPath string) (bool, error) {
 func Commit(repoPath, message string, files []string) error {
 	if message == "" {
 		return fmt.Errorf("コミットメッセージが空です")
+	}
+
+	// Git の user.name と user.email が設定されているか確認し、設定されていない場合は設定する
+	// GitHub Actions環境では GITHUB_ACTOR を使用
+	err := ensureGitConfig(repoPath)
+	if err != nil {
+		return fmt.Errorf("Git 設定の確認に失敗しました: %w", err)
 	}
 
 	// ファイルが指定されていない場合は、すべての変更をステージング

@@ -51,25 +51,25 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 
 	metrics := []metric{
 		{
-			label: "スター",
+			label: "Stars",
 			value: stats.TotalStars,
 			icon:  "⭐",
 			color: "#ffd700",
 		},
 		{
-			label: "リポジトリ",
+			label: "Repos",
 			value: stats.RepositoryCount,
 			icon:  "📦",
 			color: "#58a6ff",
 		},
 		{
-			label: "コミット",
+			label: "Commits",
 			value: stats.TotalCommits,
 			icon:  "💾",
 			color: "#56d364",
 		},
 		{
-			label: "プルリク",
+			label: "PRs",
 			value: stats.TotalPullRequests,
 			icon:  "🔀",
 			color: "#a371f7",

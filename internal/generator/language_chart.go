@@ -27,7 +27,7 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 	}
 
 	if len(rankedLanguages) == 0 {
-		return generateEmptyChart("言語ランキング", "データがありません"), nil
+		return generateEmptyChart("Language Ranking", "No data available"), nil
 	}
 
 	// 表示する言語数を決定
@@ -64,7 +64,7 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 `, width, chartHeight, DefaultBackgroundColor))
 
 	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s">言語ランキング</text>
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s">Language Ranking</text>
 `, width/2, 28, DefaultTextColor))
 
 	// ランキング項目を表示

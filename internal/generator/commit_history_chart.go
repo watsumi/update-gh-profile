@@ -20,14 +20,14 @@ import (
 // - SVG は適切なサイズとスタイリングを持つ
 func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 	if len(commitHistory) == 0 {
-		return generateEmptyChart("コミット推移", "データがありません"), nil
+		return generateEmptyChart("Commit History", "No data available"), nil
 	}
 
 	// 日付順でソート
 	sortedPairs := aggregator.SortCommitHistoryByDate(commitHistory)
 
 	if len(sortedPairs) == 0 {
-		return generateEmptyChart("コミット推移", "データがありません"), nil
+		return generateEmptyChart("Commit History", "No data available"), nil
 	}
 
 	// SVG のサイズを設定
@@ -76,7 +76,7 @@ func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 `, width, height, DefaultBackgroundColor))
 
 	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">コミット推移</text>
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Commit History</text>
 `, width/2, 30, DefaultTextColor))
 
 	// Y軸のグリッド線とラベル

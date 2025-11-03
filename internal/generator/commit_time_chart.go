@@ -20,7 +20,7 @@ import (
 // - 24時間すべての時間帯が表示される（データがない時間帯は0として表示）
 func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 	if len(timeDistribution) == 0 {
-		return generateEmptyChart("コミット時間帯", "データがありません"), nil
+		return generateEmptyChart("Commit Time Distribution", "No data available"), nil
 	}
 
 	// 時間帯順でソート
@@ -76,7 +76,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 `, width, height, DefaultBackgroundColor))
 
 	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">コミット時間帯（UTC）</text>
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Commit Time Distribution (UTC)</text>
 `, width/2, 35, DefaultTextColor))
 
 	// ヒートマップ形式で表示
@@ -123,7 +123,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 
 		// 時間帯ラベル（6時間ごと）
 		if hour%6 == 0 {
-			svg.WriteString(fmt.Sprintf(`  <text x="%.1f" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="10" fill="%s" text-anchor="middle">%02d時</text>
+			svg.WriteString(fmt.Sprintf(`  <text x="%.1f" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="10" fill="%s" text-anchor="middle">%02d:00</text>
 `, x+barWidth/2, height-padding+15, DefaultTextColor, hour))
 		}
 
@@ -140,7 +140,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 
 	// 凡例（コミット数が多い順に色の説明）
 	legendY := height - padding - chartHeight - 25
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">多い</text>
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">High</text>
 `, padding, legendY, DefaultTextColor))
 
 	// カラーバーを表示
@@ -151,7 +151,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 `, x, legendY-8, color))
 	}
 
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">少ない</text>
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">Low</text>
 `, padding+40+125, legendY, DefaultTextColor))
 
 	// フッター

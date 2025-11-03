@@ -19,7 +19,7 @@ import (
 // - 上位5つの言語のみが表示される
 func GenerateCommitLanguagesChart(commitLanguages map[string]int) (string, error) {
 	if len(commitLanguages) == 0 {
-		return generateEmptyChart("コミットごとの使用言語Top5", "データがありません"), nil
+		return generateEmptyChart("Top 5 Languages by Commit", "No data available"), nil
 	}
 
 	// 使用回数でソートしてTop5を抽出
@@ -44,7 +44,7 @@ func GenerateCommitLanguagesChart(commitLanguages map[string]int) (string, error
 	}
 
 	if len(langList) == 0 {
-		return generateEmptyChart("コミットごとの使用言語Top5", "データがありません"), nil
+		return generateEmptyChart("Top 5 Languages by Commit", "No data available"), nil
 	}
 
 	// SVG のサイズを設定
@@ -87,7 +87,7 @@ func GenerateCommitLanguagesChart(commitLanguages map[string]int) (string, error
 `, width, height, DefaultBackgroundColor))
 
 	// タイトル
-	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">コミットごとの使用言語Top5</text>
+	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Top 5 Languages by Commit</text>
 `, width/2, 35, DefaultTextColor))
 
 	// 棒グラフを表示
@@ -119,7 +119,7 @@ func GenerateCommitLanguagesChart(commitLanguages map[string]int) (string, error
 		}
 
 		// 使用回数（バーの右側）
-		countText := fmt.Sprintf("%d ファイル", item.count)
+		countText := fmt.Sprintf("%d files", item.count)
 		textX := barX + barMaxWidth + 10
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="12" fill="%s">%s</text>
 `, textX, yPos+5, DefaultTextColor, countText))

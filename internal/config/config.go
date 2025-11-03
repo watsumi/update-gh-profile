@@ -7,43 +7,43 @@ import (
 	"os"
 )
 
-// Config アプリケーションの設定を保持する構造体
-// Go言語では、構造体（struct）を使ってデータをまとめます
+// Config struct to hold application configuration
+// In Go, structs are used to group data together
 type Config struct {
-	// GitHubToken GitHub API の認証トークン
-	// すべてのリポジトリを読み取る権限が必要
+	// GitHubToken authentication token for GitHub API
+	// Requires permission to read all repositories
 	GitHubToken string
 }
 
-// Load 環境変数から設定を読み込む
-// Goでは、大文字で始まる関数は外部パッケージから呼び出せます（公開関数）
+// Load loads configuration from environment variables
+// In Go, functions starting with capital letters can be called from external packages (public functions)
 func Load() (*Config, error) {
-	// &Config{} は構造体のポインタを作成します
-	// Goでは、構造体を返す場合、ポインタで返すのが一般的です
+	// &Config{} creates a pointer to a struct
+	// In Go, it's common to return structs by pointer
 	cfg := &Config{}
 
-	// 環境変数 GITHUB_TOKEN を読み込む
+	// Load GITHUB_TOKEN environment variable
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		return nil, errors.New("GITHUB_TOKEN 環境変数が設定されていません")
+		return nil, errors.New("GITHUB_TOKEN environment variable is not set")
 	}
 	cfg.GitHubToken = token
 
-	// ログ出力: 設定読み込み成功（INFOレベル相当）
-	log.Printf("設定を読み込みました: トークン設定=設定済み（認証ユーザーは自動取得されます）")
+	// Log output: configuration load success (INFO level equivalent)
+	log.Printf("Configuration loaded: token=set (authenticated user will be automatically fetched)")
 
 	return cfg, nil
 }
 
-// Validate 設定値の検証を行う
+// Validate validates configuration values
 func (c *Config) Validate() error {
 	if c.GitHubToken == "" {
-		return errors.New("GitHubToken が設定されていません")
+		return errors.New("GitHubToken is not set")
 	}
 
-	// トークンが空でないことを確認（最小限の検証）
+	// Verify token is not empty (minimal validation)
 	if len(c.GitHubToken) < 10 {
-		return fmt.Errorf("GitHubToken が短すぎます（長さ: %d）", len(c.GitHubToken))
+		return fmt.Errorf("GitHubToken is too short (length: %d)", len(c.GitHubToken))
 	}
 
 	return nil

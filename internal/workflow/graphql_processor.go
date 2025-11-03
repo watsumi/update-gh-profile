@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// AggregateGraphQLData GraphQLから取得したデータを集計する
+// AggregateGraphQLData aggregates data fetched from GraphQL
 func AggregateGraphQLData(ctx context.Context, token string, username, userID string, excludeForks bool) (
 	map[string]int, // languageTotals
 	map[string]map[string]int, // commitHistories
@@ -19,62 +19,62 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 	map[string]map[string]int, // allCommitLanguages
 	int, // totalCommits
 	int, // totalPRs
-	[]*github.Repository, // repos (サマリー統計用)
+	[]*github.Repository, // repos (for summary statistics)
 	error,
 ) {
-	logger.Info("リポジトリ情報を一括取得します")
+	logger.Info("Fetching repository information in bulk")
 
-	// 1. リポジトリ情報をGraphQLで一括取得（生成された型を使用）
+	// 1. Fetch repository information via GraphQL (using generated types)
 	repoGraphQLData, err := repository.FetchRepositoriesWithGraphQLGenerated(ctx, token, username, excludeForks)
 	if err != nil {
-		logger.LogError(err, "GraphQLによるリポジトリ情報の取得に失敗しました")
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("GraphQLによるリポジトリ情報の取得に失敗しました: %w", err)
+		logger.LogError(err, "Failed to fetch repository information via GraphQL")
+		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("failed to fetch repository information via GraphQL: %w", err)
 	}
 
-	logger.Info("%d 個のリポジトリ情報を取得しました", len(repoGraphQLData))
+	logger.Info("Fetched %d repository information items", len(repoGraphQLData))
 
-	// 2. ユーザー詳細情報を取得（コミット数、PR数など）（生成された型を使用）
+	// 2. Fetch user details (commit count, PR count, etc.) (using generated types)
 	userDetails, err := repository.FetchUserDetailsWithGraphQLGenerated(ctx, token, username)
 	if err != nil {
-		// 502 Bad Gatewayなどの一時的なエラーは警告として扱う（致命的ではない）
-		logger.Warning("GraphQLによるユーザー詳細情報の取得に失敗しました: %v（続行します）", err)
-		userDetails = nil // 明示的にnilを設定
+		// Treat temporary errors like 502 Bad Gateway as warnings (not fatal)
+		logger.Warning("Failed to fetch user details via GraphQL: %v (continuing)", err)
+		userDetails = nil // Explicitly set to nil
 	}
 
-	// 3. コミット時間帯を取得（過去1年間）
+	// 3. Fetch commit time distribution (past 1 year)
 	since := time.Now().AddDate(-1, 0, 0)
 	until := time.Now()
 	timeDistribution, err := repository.FetchProductiveTimeWithGraphQL(ctx, token, username, userID, since, until)
 	if err != nil {
-		logger.LogError(err, "GraphQLによるコミット時間帯の取得に失敗しました")
-		timeDistribution = make(map[int]int) // 空のマップで続行
+		logger.LogError(err, "Failed to fetch commit time distribution via GraphQL")
+		timeDistribution = make(map[int]int) // Continue with empty map
 	}
 
-	// 4. コミットごとの言語を取得
+	// 4. Fetch languages per commit
 	commitLanguages, err := repository.FetchCommitLanguagesWithGraphQL(ctx, token, username)
 	if err != nil {
-		logger.LogError(err, "GraphQLによるコミット言語情報の取得に失敗しました")
-		commitLanguages = make(map[string]map[string]int) // 空のマップで続行
+		logger.LogError(err, "Failed to fetch commit language information via GraphQL")
+		commitLanguages = make(map[string]map[string]int) // Continue with empty map
 	}
 
-	// 5. データを集計
+	// 5. Aggregate data
 	languageTotals := make(map[string]int)
 	commitHistories := make(map[string]map[string]int)
 
-	// リポジトリごとの言語データを集計
+	// Aggregate language data per repository
 	for _, repo := range repoGraphQLData {
 		repoKey := fmt.Sprintf("%s/%s", repo.Owner.Login, repo.Name)
 
-		// 言語データを集計
+		// Aggregate language data
 		for _, lang := range repo.Languages.Nodes {
 			languageTotals[lang.Name] += lang.Size
 		}
 
-		// コミット履歴を集計（日付ごと）
+		// Aggregate commit history (by date)
 		if repo.DefaultBranchRef.Target.History.Nodes != nil {
 			history := make(map[string]int)
 			for _, commit := range repo.DefaultBranchRef.Target.History.Nodes {
-				// 日付を取得（YYYY-MM-DD形式）
+				// Get date (YYYY-MM-DD format)
 				date := ""
 				if commit.CommittedDate != "" {
 					t, err := time.Parse(time.RFC3339, commit.CommittedDate)
@@ -96,23 +96,23 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 		}
 	}
 
-	// コミット時間帯をリポジトリごとに集計
+	// Aggregate commit time distribution per repository
 	timeDistributions := make(map[string]map[int]int)
-	// GraphQLから取得した時間帯分布をそのまま使用
-	// （全てのリポジトリをまとめた結果なので、1つのエントリとして扱う）
+	// Use time distribution fetched from GraphQL as-is
+	// (aggregated result from all repositories, so treat as single entry)
 	if len(timeDistribution) > 0 {
 		timeDistributions["all"] = timeDistribution
 	}
 
-	// コミットごとの言語データを集計
+	// Aggregate language data per commit
 	allCommitLanguages := commitLanguages
 
-	// 総コミット数と総PR数を計算
+	// Calculate total commits and total PRs
 	var totalCommits, totalPRs, totalStars int
 	if userDetails != nil {
-		// ユーザー詳細からPR数を取得
+		// Get PR count from user details
 		totalPRs = userDetails.PullRequests.TotalCount
-		// リポジトリごとのコミット数とスター数を合計
+		// Sum commit count and star count per repository
 		for _, repo := range repoGraphQLData {
 			if repo.DefaultBranchRef.Target.History.TotalCount > 0 {
 				totalCommits += repo.DefaultBranchRef.Target.History.TotalCount
@@ -120,7 +120,7 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 			totalStars += repo.StargazerCount
 		}
 	} else {
-		// フォールバック: リポジトリデータから集計
+		// Fallback: aggregate from repository data
 		for _, repo := range repoGraphQLData {
 			if repo.DefaultBranchRef.Target.History.TotalCount > 0 {
 				totalCommits += repo.DefaultBranchRef.Target.History.TotalCount
@@ -129,10 +129,10 @@ func AggregateGraphQLData(ctx context.Context, token string, username, userID st
 		}
 	}
 
-	logger.Info("データの集計が完了しました: 言語数=%d, コミット履歴数=%d, 時間帯分布=%d",
+	logger.Info("Data aggregation completed: languages=%d, commit histories=%d, time distributions=%d",
 		len(languageTotals), len(commitHistories), len(timeDistributions))
 
-	// GraphQLデータからgithub.Repository構造体を作成（既存のコードとの互換性のため）
+	// Create github.Repository structs from GraphQL data (for compatibility with existing code)
 	var repos []*github.Repository
 	for _, repoData := range repoGraphQLData {
 		repo := &github.Repository{

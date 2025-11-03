@@ -25,13 +25,14 @@ func TestGenerateLanguageChart(t *testing.T) {
 			},
 			maxItems: 5,
 			wantContains: []string{
-				"Language Ranking",
+				"Language Distribution",
 				"Go",
 				"Python",
 				"JavaScript",
 				"TypeScript",
 				"50.0%",
 				"25.0%",
+				"<path", // Pie chart path elements
 			},
 			wantNotContains: []string{},
 		},
@@ -40,7 +41,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 			rankedLanguages: []aggregator.LanguageStat{},
 			maxItems:        5,
 			wantContains: []string{
-				"Language Ranking",
+				"Language Distribution",
 				"No data available",
 			},
 			wantNotContains: []string{},

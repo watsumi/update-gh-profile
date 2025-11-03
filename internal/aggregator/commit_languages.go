@@ -6,46 +6,46 @@ import (
 	"strings"
 )
 
-// AggregateCommitLanguages コミットごとの使用言語Top5を集計する
+// AggregateCommitLanguages aggregates top 5 languages used per commit
 //
 // Preconditions:
-//   - commitLanguages が map[string]map[string]map[string]int{リポジトリ名: {コミットSHA: {言語名: 出現回数}}} の形式であること
-//     または map[string]map[string]int{コミットSHA: {言語名: 出現回数}} の形式であること
-//   - excludedLanguages が除外する言語名のスライスであること（空でも可）
+//   - commitLanguages is in the format map[string]map[string]map[string]int{repository: {commitSHA: {language: count}}}
+//     or map[string]map[string]int{commitSHA: {language: count}}
+//   - excludedLanguages is a slice of language names to exclude (can be empty)
 //
 // Postconditions:
-// - 返される map は map[string]int{言語名: 使用回数} の形式で、Top5のみを含む（除外言語を除く）
-// - 使用回数が多い順にソートされている
+// - Returns a map in the format map[string]int{language: count} containing only top 5 (excluding excluded languages)
+// - Sorted by usage count in descending order
 //
 // Invariants:
-// - 使用回数が多い順にソートされ、上位5つが返される
-// - 除外言語は集計から除外される
+// - Sorted by usage count in descending order, top 5 are returned
+// - Excluded languages are excluded from aggregation
 func AggregateCommitLanguages(commitLanguages map[string]map[string]int, excludedLanguages []string) map[string]int {
-	log.Printf("コミットごとの言語使用状況の集計を開始: %d コミット", len(commitLanguages))
+	log.Printf("Starting aggregation of language usage per commit: %d commits", len(commitLanguages))
 
-	// 除外リストを大文字小文字を区別しない比較のためにmapに変換
+	// Convert exclusion list to map for case-insensitive comparison
 	excludedMap := make(map[string]bool)
 	for _, lang := range excludedLanguages {
-		// 空白を削除し、大文字小文字を区別しない比較のために小文字に変換
+		// Trim whitespace and convert to lowercase for case-insensitive comparison
 		normalized := strings.TrimSpace(strings.ToLower(lang))
 		if normalized != "" {
 			excludedMap[normalized] = true
 		}
 	}
 
-	// 言語ごとの使用回数を集計する map
+	// Map to aggregate usage count per language
 	languageCounts := make(map[string]int)
 
-	// 各コミットの言語使用状況を集計
+	// Aggregate language usage for each commit
 	for commitSHA, langs := range commitLanguages {
-		// SHAが短い場合の処理
+		// Handle short SHA
 		shaDisplay := commitSHA
 		if len(commitSHA) > 7 {
 			shaDisplay = commitSHA[:7]
 		}
-		log.Printf("  コミット %s: %d 言語を使用", shaDisplay, len(langs))
+		log.Printf("  Commit %s: %d languages used", shaDisplay, len(langs))
 		for lang, count := range langs {
-			// 除外言語をスキップ
+			// Skip excluded languages
 			normalized := strings.ToLower(lang)
 			if excludedMap[normalized] {
 				continue
@@ -54,31 +54,31 @@ func AggregateCommitLanguages(commitLanguages map[string]map[string]int, exclude
 		}
 	}
 
-	log.Printf("言語ごとの使用回数集計完了: %d 言語", len(languageCounts))
+	log.Printf("Language usage count aggregation completed: %d languages", len(languageCounts))
 
-	// 使用回数でソートしてTop5を抽出
+	// Sort by usage count and extract top 5
 	top5 := extractTop5Languages(languageCounts)
 
-	log.Printf("コミットごとの言語Top5集計完了: %d 言語", len(top5))
+	log.Printf("Top 5 languages by commit aggregation completed: %d languages", len(top5))
 	return top5
 }
 
-// extractTop5Languages 言語ごとの使用回数からTop5を抽出する
+// extractTop5Languages extracts top 5 languages from usage count per language
 //
 // Preconditions:
-// - languageCounts が map[string]int{言語名: 使用回数} の形式であること
+// - languageCounts is in the format map[string]int{language: count}
 //
 // Postconditions:
-// - 返される map は使用回数が多い順にソートされたTop5のみを含む
+// - Returns a map containing only top 5, sorted by usage count in descending order
 //
 // Invariants:
-// - 使用回数が同じ場合は、言語名の辞書順でソートされる
+// - When usage counts are the same, sorted by language name in dictionary order
 func extractTop5Languages(languageCounts map[string]int) map[string]int {
 	if len(languageCounts) == 0 {
 		return make(map[string]int)
 	}
 
-	// 言語と使用回数のペアのスライスを作成
+	// Create a slice of language and count pairs
 	type langCount struct {
 		lang  string
 		count int
@@ -88,7 +88,7 @@ func extractTop5Languages(languageCounts map[string]int) map[string]int {
 		langList = append(langList, langCount{lang: lang, count: count})
 	}
 
-	// 使用回数降順でソート（使用回数が同じ場合は言語名昇順）
+	// Sort by usage count descending (ascending by language name when counts are equal)
 	sort.Slice(langList, func(i, j int) bool {
 		if langList[i].count != langList[j].count {
 			return langList[i].count > langList[j].count
@@ -96,7 +96,7 @@ func extractTop5Languages(languageCounts map[string]int) map[string]int {
 		return langList[i].lang < langList[j].lang
 	})
 
-	// Top5を抽出
+	// Extract top 5
 	maxCount := 5
 	if len(langList) < maxCount {
 		maxCount = len(langList)

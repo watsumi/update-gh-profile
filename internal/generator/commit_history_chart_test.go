@@ -13,7 +13,7 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 		wantNotContains []string
 	}{
 		{
-			name: "正常系: 複数の日付データ",
+			name: "Normal case: multiple date data",
 			commitHistory: map[string]int{
 				"2024-01-01": 10,
 				"2024-01-02": 15,
@@ -23,14 +23,14 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 			},
 			wantContains: []string{
 				"Commit History",
-				"01/01", // MM/DD形式のラベル
+				"01/01", // MM/DD format label
 				"<svg",
-				"<rect", // 棒グラフに変更されたため
+				"<rect", // Changed to bar chart
 			},
 			wantNotContains: []string{},
 		},
 		{
-			name:          "空のデータ",
+			name:          "Empty data",
 			commitHistory: map[string]int{},
 			wantContains: []string{
 				"Commit History",
@@ -39,13 +39,13 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name: "単一日付",
+			name: "Single date",
 			commitHistory: map[string]int{
 				"2024-01-01": 10,
 			},
 			wantContains: []string{
 				"Commit History",
-				"01/01", // MM/DD形式のラベル
+				"01/01", // MM/DD format label
 				"<svg",
 			},
 			wantNotContains: []string{},
@@ -60,7 +60,7 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 				return
 			}
 
-			// SVG形式の基本的な検証
+			// Basic SVG format validation
 			if !strings.HasPrefix(svg, "<?xml") {
 				t.Errorf("GenerateCommitHistoryChart() SVG should start with <?xml")
 			}
@@ -69,14 +69,14 @@ func TestGenerateCommitHistoryChart(t *testing.T) {
 				t.Errorf("GenerateCommitHistoryChart() SVG should contain <svg> tag")
 			}
 
-			// 期待される文字列が含まれているか確認
+			// Check if expected strings are contained
 			for _, want := range tt.wantContains {
 				if !strings.Contains(svg, want) {
 					t.Errorf("GenerateCommitHistoryChart() should contain %q", want)
 				}
 			}
 
-			// 含まれていないことを期待する文字列の確認
+			// Check that strings that should not be contained are not present
 			for _, notWant := range tt.wantNotContains {
 				if strings.Contains(svg, notWant) {
 					t.Errorf("GenerateCommitHistoryChart() should not contain %q", notWant)

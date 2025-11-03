@@ -14,7 +14,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 		wantNotContains   []string
 	}{
 		{
-			name: "正常系: 複数言語、複数コミット",
+			name: "Normal case: multiple languages, multiple commits",
 			commitLanguages: map[string]map[string]int{
 				"sha1": {
 					"Go":         5,
@@ -38,7 +38,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 			wantNotContains:   []string{},
 		},
 		{
-			name:              "空のmap",
+			name:              "Empty map",
 			commitLanguages:   map[string]map[string]int{},
 			excludedLanguages: []string{},
 			wantCount:         0,
@@ -46,7 +46,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 			wantNotContains:   []string{},
 		},
 		{
-			name: "言語数が5未満",
+			name: "Number of languages less than 5",
 			commitLanguages: map[string]map[string]int{
 				"sha1": {
 					"Go":     5,
@@ -59,7 +59,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 			wantNotContains:   []string{},
 		},
 		{
-			name: "同じ使用回数の言語",
+			name: "Languages with same usage count",
 			commitLanguages: map[string]map[string]int{
 				"sha1": {
 					"Go":     3,
@@ -71,11 +71,11 @@ func TestAggregateCommitLanguages(t *testing.T) {
 			},
 			excludedLanguages: []string{},
 			wantCount:         5,
-			wantTop5:          []string{"C++", "Go", "Java", "Python", "Rust"}, // 使用回数が同じ場合は辞書順
+			wantTop5:          []string{"C++", "Go", "Java", "Python", "Rust"}, // Alphabetical order when usage count is the same
 			wantNotContains:   []string{},
 		},
 		{
-			name: "除外言語が設定されている場合",
+			name: "When excluded languages are set",
 			commitLanguages: map[string]map[string]int{
 				"sha1": {
 					"Go":         5,
@@ -100,7 +100,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 				t.Errorf("AggregateCommitLanguages() count = %d, want %d", len(result), tt.wantCount)
 			}
 
-			// Top5の順序と内容を確認
+			// Verify Top 5 order and content
 			for i, wantLang := range tt.wantTop5 {
 				if i >= len(tt.wantTop5) {
 					break
@@ -110,7 +110,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 				}
 			}
 
-			// 使用回数が多い順にソートされていることを確認
+			// Verify that sorting is by usage count (descending)
 			var sortedLangs []string
 			type langCount struct {
 				lang  string
@@ -121,7 +121,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 				langList = append(langList, langCount{lang: lang, count: count})
 			}
 
-			// 使用回数降順でソート
+			// Sort by usage count (descending)
 			for i := 0; i < len(langList)-1; i++ {
 				for j := i + 1; j < len(langList); j++ {
 					if langList[i].count < langList[j].count {
@@ -134,7 +134,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 				sortedLangs = append(sortedLangs, item.lang)
 			}
 
-			// Top5の順序を確認（使用回数が同じ場合は辞書順になる可能性があるため、柔軟にチェック）
+			// Verify Top 5 order (flexible check since alphabetical order may be used when usage count is the same)
 			for i := 1; i < len(langList); i++ {
 				if langList[i-1].count < langList[i].count {
 					t.Errorf("AggregateCommitLanguages() not sorted correctly: %d < %d",
@@ -142,7 +142,7 @@ func TestAggregateCommitLanguages(t *testing.T) {
 				}
 			}
 
-			// 除外された言語が含まれていないことを確認
+			// Verify that excluded languages are not contained
 			for _, notWant := range tt.wantNotContains {
 				if _, ok := result[notWant]; ok {
 					t.Errorf("AggregateCommitLanguages() should not contain excluded language %q", notWant)
@@ -160,7 +160,7 @@ func TestExtractTop5Languages(t *testing.T) {
 		wantTopLang    string
 	}{
 		{
-			name: "正常系: 5言語以上",
+			name: "Normal case: 5 or more languages",
 			languageCounts: map[string]int{
 				"Go":         10,
 				"Python":     8,
@@ -173,7 +173,7 @@ func TestExtractTop5Languages(t *testing.T) {
 			wantTopLang: "Go",
 		},
 		{
-			name: "言語数が5未満",
+			name: "Number of languages less than 5",
 			languageCounts: map[string]int{
 				"Go":     10,
 				"Python": 5,
@@ -182,7 +182,7 @@ func TestExtractTop5Languages(t *testing.T) {
 			wantTopLang: "Go",
 		},
 		{
-			name:           "空のmap",
+			name:           "Empty map",
 			languageCounts: map[string]int{},
 			wantCount:      0,
 		},

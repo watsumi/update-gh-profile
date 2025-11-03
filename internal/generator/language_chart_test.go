@@ -16,7 +16,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 		wantNotContains []string
 	}{
 		{
-			name: "正常系: 複数言語",
+			name: "Normal case: multiple languages",
 			rankedLanguages: []aggregator.LanguageStat{
 				{Language: "Go", Bytes: 1000, Percentage: 50.0},
 				{Language: "Python", Bytes: 500, Percentage: 25.0},
@@ -37,7 +37,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name:            "空のデータ",
+			name:            "Empty data",
 			rankedLanguages: []aggregator.LanguageStat{},
 			maxItems:        5,
 			wantContains: []string{
@@ -47,7 +47,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name: "maxItems未満の言語数",
+			name: "Number of languages less than maxItems",
 			rankedLanguages: []aggregator.LanguageStat{
 				{Language: "Go", Bytes: 1000, Percentage: 60.0},
 				{Language: "Python", Bytes: 400, Percentage: 40.0},
@@ -62,7 +62,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name: "特殊文字を含む言語名",
+			name: "Language names with special characters",
 			rankedLanguages: []aggregator.LanguageStat{
 				{Language: "C++", Bytes: 1000, Percentage: 50.0},
 				{Language: "C#", Bytes: 500, Percentage: 25.0},
@@ -84,7 +84,7 @@ func TestGenerateLanguageChart(t *testing.T) {
 				return
 			}
 
-			// SVG形式の基本的な検証
+			// Basic SVG format validation
 			if !strings.HasPrefix(svg, "<?xml") {
 				t.Errorf("GenerateLanguageChart() SVG should start with <?xml")
 			}
@@ -93,14 +93,14 @@ func TestGenerateLanguageChart(t *testing.T) {
 				t.Errorf("GenerateLanguageChart() SVG should contain <svg> tag")
 			}
 
-			// 期待される文字列が含まれているか確認
+			// Check if expected strings are contained
 			for _, want := range tt.wantContains {
 				if !strings.Contains(svg, want) {
 					t.Errorf("GenerateLanguageChart() should contain %q", want)
 				}
 			}
 
-			// 含まれていないことを期待する文字列の確認
+			// Check that strings that should not be contained are not present
 			for _, notWant := range tt.wantNotContains {
 				if strings.Contains(svg, notWant) {
 					t.Errorf("GenerateLanguageChart() should not contain %q", notWant)
@@ -118,31 +118,31 @@ func TestEscapeXML(t *testing.T) {
 		wantNotContains []string
 	}{
 		{
-			name:            "アンパサンド",
+			name:            "Ampersand",
 			input:           "Go & Python",
-			wantContains:    []string{"Go", "&amp;", "Python"}, // &amp;が含まれていることを確認
+			wantContains:    []string{"Go", "&amp;", "Python"}, // Verify that &amp; is contained
 			wantNotContains: []string{},
 		},
 		{
-			name:            "不等号",
+			name:            "Inequality operators",
 			input:           "A < B > C",
 			wantContains:    []string{"&lt;", "&gt;"},
-			wantNotContains: []string{"<", ">"}, // エスケープされていない < と > が含まれていないこと
+			wantNotContains: []string{"<", ">"}, // Verify that unescaped < and > are not contained
 		},
 		{
-			name:            "引用符",
+			name:            "Quotes",
 			input:           `"Hello"`,
 			wantContains:    []string{"&quot;"},
-			wantNotContains: []string{`"`}, // エスケープされていない " が含まれていないこと
+			wantNotContains: []string{`"`}, // Verify that unescaped " is not contained
 		},
 		{
-			name:            "通常の文字",
+			name:            "Normal characters",
 			input:           "Go",
 			wantContains:    []string{"Go"},
 			wantNotContains: []string{},
 		},
 		{
-			name:            "C++（特殊文字なし）",
+			name:            "C++ (no special characters)",
 			input:           "C++",
 			wantContains:    []string{"C++"},
 			wantNotContains: []string{},
@@ -153,14 +153,14 @@ func TestEscapeXML(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			escaped := escapeXML(tt.input)
 
-			// 期待されるエスケープシーケンスが含まれていることを確認
+			// Verify that expected escape sequences are contained
 			for _, want := range tt.wantContains {
 				if !strings.Contains(escaped, want) {
 					t.Errorf("escapeXML(%q) should contain %q, got %q", tt.input, want, escaped)
 				}
 			}
 
-			// エスケープされていない文字が含まれていないことを確認
+			// Verify that unescaped characters are not contained
 			for _, notWant := range tt.wantNotContains {
 				if strings.Contains(escaped, notWant) {
 					t.Errorf("escapeXML(%q) should not contain %q, got %q", tt.input, notWant, escaped)

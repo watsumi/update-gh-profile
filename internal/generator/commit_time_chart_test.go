@@ -13,7 +13,7 @@ func TestGenerateCommitTimeChart(t *testing.T) {
 		wantNotContains  []string
 	}{
 		{
-			name: "正常系: 複数の時間帯データ",
+			name: "Normal case: multiple time slot data",
 			timeDistribution: map[int]int{
 				9:  10,
 				10: 15,
@@ -30,7 +30,7 @@ func TestGenerateCommitTimeChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name:             "空のデータ",
+			name:             "Empty data",
 			timeDistribution: map[int]int{},
 			wantContains: []string{
 				"Commit Time Distribution",
@@ -39,11 +39,11 @@ func TestGenerateCommitTimeChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name: "全時間帯にデータがある場合",
+			name: "When data exists for all time slots",
 			timeDistribution: func() map[int]int {
 				data := make(map[int]int)
 				for i := 0; i < 24; i++ {
-					data[i] = i * 2 // 時間帯ごとに異なる値を設定
+					data[i] = i * 2 // Set different values for each time slot
 				}
 				return data
 			}(),
@@ -65,7 +65,7 @@ func TestGenerateCommitTimeChart(t *testing.T) {
 				return
 			}
 
-			// SVG形式の基本的な検証
+			// Basic SVG format validation
 			if !strings.HasPrefix(svg, "<?xml") {
 				t.Errorf("GenerateCommitTimeChart() SVG should start with <?xml")
 			}
@@ -74,14 +74,14 @@ func TestGenerateCommitTimeChart(t *testing.T) {
 				t.Errorf("GenerateCommitTimeChart() SVG should contain <svg> tag")
 			}
 
-			// 期待される文字列が含まれているか確認
+			// Check if expected strings are contained
 			for _, want := range tt.wantContains {
 				if !strings.Contains(svg, want) {
 					t.Errorf("GenerateCommitTimeChart() should contain %q", want)
 				}
 			}
 
-			// 含まれていないことを期待する文字列の確認
+			// Check that strings that should not be contained are not present
 			for _, notWant := range tt.wantNotContains {
 				if strings.Contains(svg, notWant) {
 					t.Errorf("GenerateCommitTimeChart() should not contain %q", notWant)

@@ -7,99 +7,99 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// PaginationResult ページネーションの結果を表す構造体
+// PaginationResult represents pagination result
 type PaginationResult struct {
 	HasNextPage bool
 	NextPageNum int
 }
 
-// CheckPagination レスポンスから次のページがあるかを判定する
+// CheckPagination determines if there is a next page from the response
 //
 // Preconditions:
-// - resp が GitHub API レスポンスであること
-// - currentCount が現在のページで取得した件数であること
-// - perPage が1ページあたりの最大件数であること
+// - resp is a GitHub API response
+// - currentCount is the number of items retrieved in the current page
+// - perPage is the maximum number of items per page
 //
 // Postconditions:
-// - PaginationResult を返す（HasNextPage と NextPageNum を含む）
+// - Returns PaginationResult (contains HasNextPage and NextPageNum)
 //
 // Invariants:
-// - レスポンスヘッダーから取得した情報を優先する
-// - 取得件数からも判定を行う（フォールバック）
+// - Prioritizes information from response headers
+// - Also performs determination based on retrieved count (fallback)
 func CheckPagination(resp *github.Response, currentCount, perPage int) PaginationResult {
-	// 1. resp.NextPage が 0 でない場合は、GitHub API のレスポンスヘッダーから取得した情報を使用
+	// 1. If resp.NextPage is not 0, use information from GitHub API response headers
 	if resp.NextPage != 0 {
-		log.Printf("レスポンスヘッダーから次ページ (%d) を検出", resp.NextPage)
+		log.Printf("Next page (%d) detected from response headers", resp.NextPage)
 		return PaginationResult{
 			HasNextPage: true,
 			NextPageNum: resp.NextPage,
 		}
 	}
 
-	// 2. NextPage が 0 でも、取得した件数が PerPage に達している場合は次のページを試みる
+	// 2. Even if NextPage is 0, if retrieved count reaches PerPage, try next page
 	if currentCount >= perPage {
-		log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数 (%d) が PerPage (%d) に達しているため、次のページを試みます", currentCount, perPage)
+		log.Printf("Warning: Could not get next page info from response headers, but retrieved count (%d) reached PerPage (%d), so trying next page", currentCount, perPage)
 		return PaginationResult{
 			HasNextPage: true,
-			NextPageNum: 0, // 手動でインクリメントする
+			NextPageNum: 0, // Manually increment
 		}
 	}
 
-	// 3. 取得した件数が30件（GitHub APIのデフォルト）の場合は、次のページがある可能性がある
+	// 3. If retrieved count is 30 (GitHub API default), there might be a next page
 	if currentCount == DefaultPageSize {
-		log.Printf("警告: レスポンスヘッダーから次ページ情報が取得できませんでしたが、取得件数が%d件（GitHub APIのデフォルト）のため、次のページを試みます", DefaultPageSize)
+		log.Printf("Warning: Could not get next page info from response headers, but retrieved count is %d (GitHub API default), so trying next page", DefaultPageSize)
 		return PaginationResult{
 			HasNextPage: true,
-			NextPageNum: 0, // 手動でインクリメントする
+			NextPageNum: 0, // Manually increment
 		}
 	}
 
-	// 4. 取得した件数が 0 の場合は、次のページがないと判断
+	// 4. If retrieved count is 0, determine there is no next page
 	if currentCount == 0 {
-		log.Printf("0件取得したため、ページネーションを終了します")
+		log.Printf("Retrieved 0 items, ending pagination")
 		return PaginationResult{
 			HasNextPage: false,
 			NextPageNum: 0,
 		}
 	}
 
-	// それ以外の場合は次のページなし
+	// Otherwise, no next page
 	return PaginationResult{
 		HasNextPage: false,
 		NextPageNum: 0,
 	}
 }
 
-// ValidateOwnerAndRepo owner と repo が有効かどうかを検証する
+// ValidateOwnerAndRepo validates if owner and repo are valid
 //
 // Preconditions:
-// - owner と repo が文字列であること
+// - owner and repo are strings
 //
 // Postconditions:
-// - どちらかが空の場合はエラーを返す
+// - Returns error if either is empty
 //
 // Invariants:
-// - 空文字列チェックのみを行う
+// - Only performs empty string check
 func ValidateOwnerAndRepo(owner, repo string) error {
 	if owner == "" || repo == "" {
-		return fmt.Errorf("owner または repo が空です: owner=%s, repo=%s", owner, repo)
+		return fmt.Errorf("owner or repo is empty: owner=%s, repo=%s", owner, repo)
 	}
 	return nil
 }
 
-// ValidateUsername username が有効かどうかを検証する
+// ValidateUsername validates if username is valid
 //
 // Preconditions:
-// - username が文字列であること
+// - username is a string
 //
 // Postconditions:
-// - 空の場合はエラーを返す
+// - Returns error if empty
 //
 // Invariants:
-// - 空文字列チェックのみを行う
+// - Only performs empty string check
 func ValidateUsername(username string) error {
 	if username == "" {
-		return fmt.Errorf("username が空です")
+		return fmt.Errorf("username is empty")
 	}
 	return nil
 }

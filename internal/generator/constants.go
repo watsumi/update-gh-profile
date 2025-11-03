@@ -1,42 +1,42 @@
 package generator
 
-// SVG 生成関連の定数
+// Constants for SVG generation
 const (
-	// DefaultSVGWidth デフォルトの SVG 幅（ピクセル）
+	// DefaultSVGWidth Default SVG width in pixels
 	DefaultSVGWidth = 495
 
-	// DefaultSVGHeight デフォルトの SVG 高さ（ピクセル）
+	// DefaultSVGHeight Default SVG height in pixels
 	DefaultSVGHeight = 320
 
-	// MaxLanguageItems 言語ランキングで表示する最大項目数
+	// MaxLanguageItems Maximum number of items to display in language ranking
 	MaxLanguageItems = 10
 
-	// SVGHeader SVG ヘッダー
+	// SVGHeader SVG header
 	SVGHeader = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
 `
 
-	// SVGFooter SVG フッター
+	// SVGFooter SVG footer
 	SVGFooter = `</svg>`
 
-	// DefaultBackgroundColor デフォルトの背景色
+	// DefaultBackgroundColor Default background color
 	DefaultBackgroundColor = "#0d1117"
 
-	// DefaultTextColor デフォルトのテキスト色
+	// DefaultTextColor Default text color
 	DefaultTextColor = "#c9d1d9"
 
-	// AccentColor アクセントカラー（メイン）
+	// AccentColor Main accent color
 	AccentColor = "#58a6ff"
 
-	// AccentColorDark アクセントカラー（ダーク）
+	// AccentColorDark Dark accent color
 	AccentColorDark = "#1f6feb"
 
-	// SecondaryColor セカンダリカラー
+	// SecondaryColor Secondary color
 	SecondaryColor = "#7c3aed"
 
-	// SuccessColor 成功色
+	// SuccessColor Success color
 	SuccessColor = "#56d364"
 
-	// WarningColor 警告色
+	// WarningColor Warning color
 	WarningColor = "#f85149"
 )

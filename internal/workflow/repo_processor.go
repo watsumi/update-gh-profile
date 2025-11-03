@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// RepoData リポジトリから取得したデータ
+// RepoData data retrieved from repository
 type RepoData struct {
 	Owner            string
 	RepoName         string
@@ -25,7 +25,7 @@ type RepoData struct {
 	Error            error
 }
 
-// ProcessRepository リポジトリを処理してデータを取得する
+// ProcessRepository processes repository and retrieves data
 func ProcessRepository(ctx context.Context, client *github.Client, rateLimiter *repository.RateLimiter, repo *github.Repository) *RepoData {
 	owner := repo.GetOwner().GetLogin()
 	repoName := repo.GetName()
@@ -39,84 +39,84 @@ func ProcessRepository(ctx context.Context, client *github.Client, rateLimiter *
 		CommitLanguages:  make(map[string]map[string]int),
 	}
 
-	// レート制限をチェックして待機
+	// Check rate limit and wait
 	if err := rateLimiter.WaitIfNeeded(ctx); err != nil {
-		data.Error = fmt.Errorf("レート制限の待機に失敗しました: %w", err)
+		data.Error = fmt.Errorf("failed to wait for rate limit: %w", err)
 		return data
 	}
 
-	// 言語データの取得
+	// Fetch language data
 	langs, err := repository.FetchRepositoryLanguages(ctx, client, owner, repoName)
 	if err != nil {
-		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "言語データの取得に失敗しました")
-		// 言語データの取得失敗は致命的ではないので、他のデータは取得を試みる
+		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "failed to fetch language data")
+		// Language data fetch failure is not fatal, so try to fetch other data
 	} else {
 		data.Languages = langs
-		// レート制限情報を更新（FetchRepositoryLanguages内でレスポンスから取得できる場合はここで更新）
+		// Update rate limit info (update here if it can be obtained from response in FetchRepositoryLanguages)
 	}
 
-	// コミット履歴の取得
+	// Fetch commit history
 	if err := rateLimiter.WaitIfNeeded(ctx); err != nil {
-		data.Error = fmt.Errorf("レート制限の待機に失敗しました: %w", err)
+		data.Error = fmt.Errorf("failed to wait for rate limit: %w", err)
 		return data
 	}
 
 	commitHistory, err := repository.FetchCommitHistory(ctx, client, owner, repoName)
 	if err != nil {
-		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "コミット履歴の取得に失敗しました")
+		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "failed to fetch commit history")
 	} else {
 		data.CommitHistory = commitHistory
 	}
 
-	// コミット時間帯の取得
+	// Fetch commit time distribution
 	if err := rateLimiter.WaitIfNeeded(ctx); err != nil {
-		data.Error = fmt.Errorf("レート制限の待機に失敗しました: %w", err)
+		data.Error = fmt.Errorf("failed to wait for rate limit: %w", err)
 		return data
 	}
 
 	timeDist, err := repository.FetchCommitTimeDistribution(ctx, client, owner, repoName)
 	if err != nil {
-		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "コミット時間帯の取得に失敗しました")
+		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "failed to fetch commit time distribution")
 	} else {
 		data.TimeDistribution = timeDist
 	}
 
-	// コミット数の取得
+	// Fetch commit count
 	if err := rateLimiter.WaitIfNeeded(ctx); err != nil {
-		data.Error = fmt.Errorf("レート制限の待機に失敗しました: %w", err)
+		data.Error = fmt.Errorf("failed to wait for rate limit: %w", err)
 		return data
 	}
 
 	commits, err := repository.FetchCommits(ctx, client, owner, repoName)
 	if err != nil {
-		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "コミットデータの取得に失敗しました")
+		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "failed to fetch commit data")
 	} else {
 		data.CommitCount = len(commits)
 	}
 
-	// コミットごとの言語取得（コミット数が多い場合はスキップ）
+	// Fetch languages per commit (skip if commit count is too large)
 	if data.CommitCount > 0 && data.CommitCount <= 100 {
 		if err := rateLimiter.WaitIfNeeded(ctx); err != nil {
-			// エラーは無視（オプショナルなデータ）
+			// Ignore error (optional data)
 		} else {
 			commitLangs, err := repository.FetchCommitLanguages(ctx, client, owner, repoName)
 			if err != nil {
-				logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "コミット言語データの取得に失敗しました")
+				logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "failed to fetch commit language data")
 			} else if len(commitLangs) > 0 {
 				data.CommitLanguages = commitLangs
 			}
 		}
 	}
 
-	// プルリクエスト数の取得
+	// Fetch pull request count
 	if err := rateLimiter.WaitIfNeeded(ctx); err != nil {
-		data.Error = fmt.Errorf("レート制限の待機に失敗しました: %w", err)
+		data.Error = fmt.Errorf("failed to wait for rate limit: %w", err)
 		return data
 	}
 
 	prCount, err := repository.FetchPullRequests(ctx, client, owner, repoName)
 	if err != nil {
-		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "プルリクエストデータの取得に失敗しました")
+		logger.LogErrorWithContext(err, fmt.Sprintf("%s/%s", owner, repoName), "failed to fetch pull request data")
 	} else {
 		data.PRCount = prCount
 	}
@@ -124,57 +124,57 @@ func ProcessRepository(ctx context.Context, client *github.Client, rateLimiter *
 	return data
 }
 
-// ProcessRepositoriesInParallel リポジトリを並列処理する
+// ProcessRepositoriesInParallel processes repositories in parallel
 func ProcessRepositoriesInParallel(ctx context.Context, client *github.Client, repos []*github.Repository, maxConcurrency int) ([]*RepoData, error) {
 	if maxConcurrency <= 0 {
-		maxConcurrency = 5 // デフォルト: 5つの並列処理
+		maxConcurrency = 5 // Default: 5 parallel processes
 	}
 
 	rateLimiter := repository.NewRateLimiter(client)
-	rateLimiter.SetRequestInterval(150 * time.Millisecond) // 150ms間隔でリクエスト
+	rateLimiter.SetRequestInterval(150 * time.Millisecond) // Request every 150ms
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxConcurrency) // セマフォで並列数を制限
+	sem := make(chan struct{}, maxConcurrency) // Limit concurrency with semaphore
 	results := make([]*RepoData, len(repos))
 	var mu sync.Mutex
 
-	// 最初のリポジトリでレート制限情報を取得
+	// Get rate limit info from first repository
 	if len(repos) > 0 {
-		// 認証ユーザー情報を取得してレート制限情報を更新
-		// （実際のAPI呼び出しはProcessRepository内で行われる）
+		// Fetch authenticated user info and update rate limit info
+		// (Actual API calls are made in ProcessRepository)
 	}
 
-	logger.Info("リポジトリを並列処理します: 総数=%d, 最大並列数=%d", len(repos), maxConcurrency)
+	logger.Info("Processing repositories in parallel: total=%d, max concurrency=%d", len(repos), maxConcurrency)
 
 	for i, repo := range repos {
 		wg.Add(1)
 		go func(idx int, r *github.Repository) {
 			defer wg.Done()
 
-			// セマフォで並列数を制限
+			// Limit concurrency with semaphore
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			// リポジトリを処理
+			// Process repository
 			data := ProcessRepository(ctx, client, rateLimiter, r)
 
-			// 結果を保存
+			// Save result
 			mu.Lock()
 			results[idx] = data
 			mu.Unlock()
 
 			if data.Error != nil {
-				logger.Warning("[%d/%d] %s/%s の処理中にエラーが発生しました: %v",
+				logger.Warning("[%d/%d] Error occurred while processing %s/%s: %v",
 					idx+1, len(repos), data.Owner, data.RepoName, data.Error)
 			} else {
-				logger.Debug("[%d/%d] %s/%s の処理が完了しました", idx+1, len(repos), data.Owner, data.RepoName)
+				logger.Debug("[%d/%d] Completed processing %s/%s", idx+1, len(repos), data.Owner, data.RepoName)
 			}
-			fmt.Printf("  [%d/%d] %s/%s を処理完了\n", idx+1, len(repos), data.Owner, data.RepoName)
+			fmt.Printf("  [%d/%d] Completed processing %s/%s\n", idx+1, len(repos), data.Owner, data.RepoName)
 		}(i, repo)
 	}
 
 	wg.Wait()
-	logger.Info("すべてのリポジトリの処理が完了しました")
+	logger.Info("Completed processing all repositories")
 
 	return results, nil
 }

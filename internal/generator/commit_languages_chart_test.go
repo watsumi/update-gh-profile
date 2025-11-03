@@ -13,14 +13,14 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 		wantNotContains []string
 	}{
 		{
-			name: "正常系: Top5言語",
+			name: "Normal case: Top 5 languages",
 			commitLanguages: map[string]int{
 				"Go":         100,
 				"Python":     80,
 				"TypeScript": 60,
 				"JavaScript": 40,
 				"Rust":       20,
-				"C++":        10, // 6番目（表示されない）
+				"C++":        10, // 6th place (not displayed)
 			},
 			wantContains: []string{
 				"Top 5 Languages by Commit",
@@ -34,11 +34,11 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 				"<svg",
 			},
 			wantNotContains: []string{
-				"C++", // Top5に含まれないため表示されない
+				"C++", // Not displayed because not in Top 5
 			},
 		},
 		{
-			name:            "空のデータ",
+			name:            "Empty data",
 			commitLanguages: map[string]int{},
 			wantContains: []string{
 				"Top 5 Languages by Commit",
@@ -47,7 +47,7 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name: "言語数が5未満",
+			name: "Number of languages less than 5",
 			commitLanguages: map[string]int{
 				"Go":     50,
 				"Python": 30,
@@ -61,7 +61,7 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 			wantNotContains: []string{},
 		},
 		{
-			name: "特殊文字を含む言語名",
+			name: "Language names with special characters",
 			commitLanguages: map[string]int{
 				"C++": 50,
 				"C#":  30,
@@ -82,7 +82,7 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 				return
 			}
 
-			// SVG形式の基本的な検証
+			// Basic SVG format validation
 			if !strings.HasPrefix(svg, "<?xml") {
 				t.Errorf("GenerateCommitLanguagesChart() SVG should start with <?xml")
 			}
@@ -91,14 +91,14 @@ func TestGenerateCommitLanguagesChart(t *testing.T) {
 				t.Errorf("GenerateCommitLanguagesChart() SVG should contain <svg> tag")
 			}
 
-			// 期待される文字列が含まれているか確認
+			// Check if expected strings are contained
 			for _, want := range tt.wantContains {
 				if !strings.Contains(svg, want) {
 					t.Errorf("GenerateCommitLanguagesChart() should contain %q", want)
 				}
 			}
 
-			// 含まれていないことを期待する文字列の確認
+			// Check that strings that should not be contained are not present
 			for _, notWant := range tt.wantNotContains {
 				if strings.Contains(svg, notWant) {
 					t.Errorf("GenerateCommitLanguagesChart() should not contain %q", notWant)

@@ -1,15 +1,15 @@
 name: 'Update GitHub Profile'
-description: '認証ユーザー自身の GitHub リポジトリメトリクスを取得して、README.md を更新する'
+description: 'Fetches GitHub repository metrics for the authenticated user and updates README.md'
 inputs:
   github_token:
-    description: 'GitHub Personal Access Token（リポジトリ情報読み取り用、すべてのリポジトリを読み取る権限が必要）'
+    description: 'GitHub Personal Access Token (for reading repository information, requires permission to read all repositories)'
     required: false
   exclude_forks:
-    description: 'フォークリポジトリを除外するかどうか（true/false）'
+    description: 'Whether to exclude forked repositories (true/false)'
     required: false
     default: 'true'
   exclude_languages:
-    description: 'ランキングから除外する言語名（カンマ区切り、例: JSON,Markdown,Text）'
+    description: 'Language names to exclude from ranking (comma-separated, e.g., JSON,Markdown,Text)'
     required: false
     default: ''
 runs:
@@ -33,7 +33,7 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
       run: |
-        echo "::group::リポジトリ一覧を取得"
+        echo "::group::Fetching repository list"
         export GITHUB_TOKEN="${{ inputs.github_token }}"
 
         EXCLUDE_FORKS="${{ inputs.exclude_forks }}"
@@ -41,13 +41,13 @@ runs:
           EXCLUDE_FORKS="true"
         fi
 
-        # 除外言語を環境変数として設定（空の場合は設定しない）
+        # Set excluded languages as environment variable (don't set if empty)
         if [ -n "${{ inputs.exclude_languages }}" ]; then
           export EXCLUDE_LANGUAGES="${{ inputs.exclude_languages }}"
         fi
 
-        # リポジトリ一覧を取得（認証ユーザー自身のリポジトリのみ）
-        # 認証ユーザーは自動的に取得されます
+        # Fetch repository list (only repositories owned by authenticated user)
+        # Authenticated user is automatically fetched
         go run ./cmd/update-gh-profile/main.go --exclude-forks="$EXCLUDE_FORKS" || exit 1
         echo "::endgroup::"
 

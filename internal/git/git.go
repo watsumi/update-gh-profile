@@ -9,10 +9,10 @@ import (
 	"strings"
 )
 
-// ensureGitConfig Git の user.name と user.email を設定する
-// GitHub Actions環境では GITHUB_ACTOR 環境変数を使用
+// ensureGitConfig sets Git user.name and user.email
+// Uses GITHUB_ACTOR environment variable in GitHub Actions environment
 func ensureGitConfig(repoPath string) error {
-	// user.name を確認
+	// Check user.name
 	cmd := exec.Command("git", "config", "--local", "user.name")
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
@@ -22,12 +22,12 @@ func ensureGitConfig(repoPath string) error {
 	userNameSet := err == nil && strings.TrimSpace(stdout.String()) != ""
 
 	if !userNameSet {
-		// user.name が設定されていない場合、設定する
+		// Set user.name if not configured
 		var userName string
 		if actor := os.Getenv("GITHUB_ACTOR"); actor != "" {
 			userName = actor
 		} else {
-			// フォールバック: GitHub Actions デフォルト
+			// Fallback: GitHub Actions default
 			userName = "github-actions[bot]"
 		}
 
@@ -36,11 +36,11 @@ func ensureGitConfig(repoPath string) error {
 		cmd.Stderr = &stderr
 		err = cmd.Run()
 		if err != nil {
-			return fmt.Errorf("user.name の設定に失敗しました: %w\nstderr: %s", err, stderr.String())
+			return fmt.Errorf("failed to set user.name: %w\nstderr: %s", err, stderr.String())
 		}
 	}
 
-	// user.email を確認
+	// Check user.email
 	cmd = exec.Command("git", "config", "--local", "user.email")
 	cmd.Dir = repoPath
 	stdout.Reset()
@@ -51,13 +51,13 @@ func ensureGitConfig(repoPath string) error {
 	userEmailSet := err == nil && strings.TrimSpace(stdout.String()) != ""
 
 	if !userEmailSet {
-		// user.email が設定されていない場合、設定する
+		// Set user.email if not configured
 		var userEmail string
 		if actor := os.Getenv("GITHUB_ACTOR"); actor != "" {
-			// GitHub Actions の no-reply メールアドレス形式
+			// GitHub Actions no-reply email address format
 			userEmail = fmt.Sprintf("%s@users.noreply.github.com", actor)
 		} else {
-			// フォールバック: GitHub Actions デフォルト
+			// Fallback: GitHub Actions default
 			userEmail = "github-actions[bot]@users.noreply.github.com"
 		}
 
@@ -66,26 +66,26 @@ func ensureGitConfig(repoPath string) error {
 		cmd.Stderr = &stderr
 		err = cmd.Run()
 		if err != nil {
-			return fmt.Errorf("user.email の設定に失敗しました: %w\nstderr: %s", err, stderr.String())
+			return fmt.Errorf("failed to set user.email: %w\nstderr: %s", err, stderr.String())
 		}
 	}
 
 	return nil
 }
 
-// DetectChanges 変更されたファイルを検出する
+// DetectChanges detects changed files
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
+// - repoPath is a valid Git repository path
 //
 // Postconditions:
-// - 変更されたファイルのリストが返される
-// - エラーが発生した場合はエラーが返される
+// - Returns a list of changed files
+// - Returns error if an error occurred
 //
 // Invariants:
-// - 返されるファイルパスは相対パスである
+// - Returned file paths are relative paths
 func DetectChanges(repoPath string) ([]string, error) {
-	// git status --porcelain を実行して変更ファイルを取得
+	// Execute git status --porcelain to get changed files
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = repoPath
 
@@ -95,10 +95,10 @@ func DetectChanges(repoPath string) ([]string, error) {
 
 	err := cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf("git status の実行に失敗しました: %w\nstderr: %s", err, stderr.String())
+		return nil, fmt.Errorf("failed to execute git status: %w\nstderr: %s", err, stderr.String())
 	}
 
-	// 出力を解析してファイルリストを作成
+	// Parse output and create file list
 	output := stdout.String()
 	if output == "" {
 		return []string{}, nil
@@ -108,13 +108,13 @@ func DetectChanges(repoPath string) ([]string, error) {
 	var files []string
 
 	for _, line := range lines {
-		// git status --porcelain の出力形式: " M file.txt" または "MM file.txt"
-		// ステータスコードの後の部分がファイルパス
+		// git status --porcelain output format: " M file.txt" or "MM file.txt"
+		// The part after the status code is the file path
 		fields := strings.Fields(line)
 		if len(fields) >= 2 {
-			// 2番目のフィールドがファイルパス
+			// Second field is the file path
 			file := strings.Join(fields[1:], " ")
-			// 絶対パスを相対パスに変換
+			// Convert absolute path to relative path
 			if filepath.IsAbs(file) {
 				relPath, err := filepath.Rel(repoPath, file)
 				if err == nil {
@@ -128,17 +128,17 @@ func DetectChanges(repoPath string) ([]string, error) {
 	return files, nil
 }
 
-// HasChanges リポジトリに変更があるかどうかを確認する
+// HasChanges checks if there are changes in the repository
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
+// - repoPath is a valid Git repository path
 //
 // Postconditions:
-// - 変更がある場合は true、ない場合は false が返される
-// - エラーが発生した場合はエラーが返される
+// - Returns true if there are changes, false otherwise
+// - Returns error if an error occurred
 //
 // Invariants:
-// - Git リポジトリが初期化されていることが前提
+// - Git repository must be initialized
 func HasChanges(repoPath string) (bool, error) {
 	files, err := DetectChanges(repoPath)
 	if err != nil {
@@ -148,32 +148,32 @@ func HasChanges(repoPath string) (bool, error) {
 	return len(files) > 0, nil
 }
 
-// Commit 変更をコミットする
+// Commit commits changes
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
-// - message が有効なコミットメッセージであること
-// - files がコミットするファイルのリストであること（空の場合はすべての変更をコミット）
+// - repoPath is a valid Git repository path
+// - message is a valid commit message
+// - files is a list of files to commit (if empty, all changes are committed)
 //
 // Postconditions:
-// - 指定されたファイルがコミットされる
-// - コミットメッセージが適用される
+// - Specified files are committed
+// - Commit message is applied
 //
 // Invariants:
-// - Git リポジトリが初期化されていることが前提
+// - Git repository must be initialized
 func Commit(repoPath, message string, files []string) error {
 	if message == "" {
-		return fmt.Errorf("コミットメッセージが空です")
+		return fmt.Errorf("commit message is empty")
 	}
 
-	// Git の user.name と user.email が設定されているか確認し、設定されていない場合は設定する
-	// GitHub Actions環境では GITHUB_ACTOR を使用
+	// Check if Git user.name and user.email are set, and set them if not
+	// Uses GITHUB_ACTOR in GitHub Actions environment
 	err := ensureGitConfig(repoPath)
 	if err != nil {
-		return fmt.Errorf("Git 設定の確認に失敗しました: %w", err)
+		return fmt.Errorf("failed to verify Git configuration: %w", err)
 	}
 
-	// ファイルが指定されていない場合は、すべての変更をステージング
+	// Stage all changes if no files are specified
 	if len(files) == 0 {
 		cmd := exec.Command("git", "add", "-A")
 		cmd.Dir = repoPath
@@ -183,10 +183,10 @@ func Commit(repoPath, message string, files []string) error {
 
 		err := cmd.Run()
 		if err != nil {
-			return fmt.Errorf("git add の実行に失敗しました: %w\nstderr: %s", err, stderr.String())
+			return fmt.Errorf("failed to execute git add: %w\nstderr: %s", err, stderr.String())
 		}
 	} else {
-		// 指定されたファイルをステージング
+		// Stage specified files
 		args := append([]string{"add"}, files...)
 		cmd := exec.Command("git", args...)
 		cmd.Dir = repoPath
@@ -196,11 +196,11 @@ func Commit(repoPath, message string, files []string) error {
 
 		err := cmd.Run()
 		if err != nil {
-			return fmt.Errorf("git add の実行に失敗しました: %w\nstderr: %s", err, stderr.String())
+			return fmt.Errorf("failed to execute git add: %w\nstderr: %s", err, stderr.String())
 		}
 	}
 
-	// コミットを実行
+	// Execute commit
 	cmd := exec.Command("git", "commit", "-m", message)
 	cmd.Dir = repoPath
 
@@ -210,38 +210,38 @@ func Commit(repoPath, message string, files []string) error {
 	err = cmd.Run()
 	if err != nil {
 		stderrStr := stderr.String()
-		// コミットする変更がない場合はエラーとしない（既にコミット済みの場合）
+		// Don't treat as error if there are no changes to commit (already committed)
 		if strings.Contains(stderrStr, "nothing to commit") || strings.Contains(stderrStr, "nothing added to commit") {
 			return nil
 		}
-		return fmt.Errorf("git commit の実行に失敗しました: %w\nstderr: %s", err, stderrStr)
+		return fmt.Errorf("failed to execute git commit: %w\nstderr: %s", err, stderrStr)
 	}
 
 	return nil
 }
 
-// SetRemoteURLWithToken リモートURLにトークンを設定する
+// SetRemoteURLWithToken sets token in remote URL
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
-// - remote がリモート名であること（省略可能、デフォルトは "origin"）
-// - token がGitHub Personal Access Tokenであること
+// - repoPath is a valid Git repository path
+// - remote is the remote name (optional, default is "origin")
+// - token is a GitHub Personal Access Token
 //
 // Postconditions:
-// - リモートURLがトークンを含む形式に更新される
+// - Remote URL is updated to include token
 //
 // Invariants:
-// - リモートリポジトリが設定されていることが前提
+// - Remote repository must be configured
 func SetRemoteURLWithToken(repoPath, remote, token string) error {
 	if remote == "" {
 		remote = "origin"
 	}
 
 	if token == "" {
-		return fmt.Errorf("トークンが設定されていません")
+		return fmt.Errorf("token is not set")
 	}
 
-	// 現在のリモートURLを取得
+	// Get current remote URL
 	cmd := exec.Command("git", "remote", "get-url", remote)
 	cmd.Dir = repoPath
 
@@ -251,40 +251,40 @@ func SetRemoteURLWithToken(repoPath, remote, token string) error {
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("リモートURLの取得に失敗しました: %w\nstderr: %s", err, stderr.String())
+		return fmt.Errorf("failed to get remote URL: %w\nstderr: %s", err, stderr.String())
 	}
 
 	currentURL := strings.TrimSpace(stdout.String())
 
-	// HTTPS形式のURLを構築
-	// https://github.com/owner/repo.git を https://TOKEN@github.com/owner/repo.git に変換
+	// Build HTTPS format URL
+	// Convert https://github.com/owner/repo.git to https://TOKEN@github.com/owner/repo.git
 	var newURL string
 	if strings.HasPrefix(currentURL, "https://") {
-		// 既に https:// で始まる場合
+		// Already starts with https://
 		if strings.Contains(currentURL, "@") {
-			// 既にトークンが含まれている場合は、置き換える
+			// Replace if token is already included
 			// https://oldtoken@github.com/owner/repo.git -> https://newtoken@github.com/owner/repo.git
 			parts := strings.SplitN(currentURL, "@", 2)
 			if len(parts) == 2 {
-				// parts[1] は github.com/owner/repo.git の部分
+				// parts[1] is the github.com/owner/repo.git part
 				newURL = fmt.Sprintf("https://%s@%s", token, parts[1])
 			} else {
-				return fmt.Errorf("リモートURLの解析に失敗しました: %s", currentURL)
+				return fmt.Errorf("failed to parse remote URL: %s", currentURL)
 			}
 		} else {
-			// トークンが含まれていない場合は追加
+			// Add token if not included
 			// https://github.com/owner/repo.git -> https://TOKEN@github.com/owner/repo.git
 			newURL = strings.Replace(currentURL, "https://", fmt.Sprintf("https://%s@", token), 1)
 		}
 	} else if strings.HasPrefix(currentURL, "git@") {
-		// SSH形式の場合はHTTPS形式に変換してトークンを追加
+		// Convert SSH format to HTTPS format and add token
 		// git@github.com:owner/repo.git -> https://TOKEN@github.com/owner/repo.git
 		newURL = strings.Replace(currentURL, "git@github.com:", fmt.Sprintf("https://%s@github.com/", token), 1)
 	} else {
-		return fmt.Errorf("サポートされていないリモートURL形式です: %s", currentURL)
+		return fmt.Errorf("unsupported remote URL format: %s", currentURL)
 	}
 
-	// リモートURLを設定
+	// Set remote URL
 	cmd = exec.Command("git", "remote", "set-url", remote, newURL)
 	cmd.Dir = repoPath
 
@@ -293,39 +293,39 @@ func SetRemoteURLWithToken(repoPath, remote, token string) error {
 
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("リモートURLの設定に失敗しました: %w\nstderr: %s", err, stderr.String())
+		return fmt.Errorf("failed to set remote URL: %w\nstderr: %s", err, stderr.String())
 	}
 
 	return nil
 }
 
-// Push リモートリポジトリにプッシュする
+// Push pushes to remote repository
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
-// - remote がリモート名であること（省略可能、デフォルトは "origin"）
-// - branch がブランチ名であること（省略可能、デフォルトは現在のブランチ）
-// - token がGitHub Personal Access Tokenであること（省略可能、設定されていない場合はURLにトークンを含めない）
+// - repoPath is a valid Git repository path
+// - remote is the remote name (optional, default is "origin")
+// - branch is the branch name (optional, default is current branch)
+// - token is a GitHub Personal Access Token (optional, if not set, URL won't include token)
 //
 // Postconditions:
-// - 変更がリモートリポジトリにプッシュされる
+// - Changes are pushed to remote repository
 //
 // Invariants:
-// - リモートリポジトリが設定されていることが前提
+// - Remote repository must be configured
 func Push(repoPath, remote, branch, token string) error {
 	if remote == "" {
 		remote = "origin"
 	}
 
-	// トークンが設定されている場合はリモートURLに設定
+	// Set token in remote URL if token is set
 	if token != "" {
 		err := SetRemoteURLWithToken(repoPath, remote, token)
 		if err != nil {
-			return fmt.Errorf("リモートURLへのトークン設定に失敗しました: %w", err)
+			return fmt.Errorf("failed to set token in remote URL: %w", err)
 		}
 	}
 
-	// ブランチが指定されていない場合は現在のブランチを取得
+	// Get current branch if branch is not specified
 	if branch == "" {
 		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 		cmd.Dir = repoPath
@@ -336,13 +336,13 @@ func Push(repoPath, remote, branch, token string) error {
 
 		err := cmd.Run()
 		if err != nil {
-			return fmt.Errorf("現在のブランチの取得に失敗しました: %w\nstderr: %s", err, stderr.String())
+			return fmt.Errorf("failed to get current branch: %w\nstderr: %s", err, stderr.String())
 		}
 
 		branch = strings.TrimSpace(stdout.String())
 	}
 
-	// プッシュを実行
+	// Execute push
 	cmd := exec.Command("git", "push", remote, branch)
 	cmd.Dir = repoPath
 
@@ -351,77 +351,77 @@ func Push(repoPath, remote, branch, token string) error {
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("git push の実行に失敗しました: %w\nstderr: %s", err, stderr.String())
+		return fmt.Errorf("failed to execute git push: %w\nstderr: %s", err, stderr.String())
 	}
 
 	return nil
 }
 
-// CommitAndPush 変更をコミットしてプッシュする（一括処理）
+// CommitAndPush commits and pushes changes (batch operation)
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
-// - message が有効なコミットメッセージであること
-// - files がコミットするファイルのリストであること（空の場合はすべての変更をコミット）
-// - remote がリモート名であること（省略可能）
-// - branch がブランチ名であること（省略可能）
-// - token がGitHub Personal Access Tokenであること（省略可能）
+// - repoPath is a valid Git repository path
+// - message is a valid commit message
+// - files is a list of files to commit (if empty, all changes are committed)
+// - remote is the remote name (optional)
+// - branch is the branch name (optional)
+// - token is a GitHub Personal Access Token (optional)
 //
 // Postconditions:
-// - 変更がコミットされ、リモートリポジトリにプッシュされる
+// - Changes are committed and pushed to remote repository
 //
 // Invariants:
-// - コミットとプッシュが順次実行される
+// - Commit and push are executed sequentially
 func CommitAndPush(repoPath, message string, files []string, remote, branch, token string) error {
-	// 変更があるか確認
+	// Check if there are changes
 	hasChanges, err := HasChanges(repoPath)
 	if err != nil {
-		return fmt.Errorf("変更の確認に失敗しました: %w", err)
+		return fmt.Errorf("failed to check for changes: %w", err)
 	}
 
 	if !hasChanges {
-		return nil // 変更がない場合は何もしない
+		return nil // Do nothing if there are no changes
 	}
 
-	// コミット
+	// Commit
 	err = Commit(repoPath, message, files)
 	if err != nil {
-		return fmt.Errorf("コミットに失敗しました: %w", err)
+		return fmt.Errorf("failed to commit: %w", err)
 	}
 
-	// プッシュ
+	// Push
 	err = Push(repoPath, remote, branch, token)
 	if err != nil {
-		return fmt.Errorf("プッシュに失敗しました: %w", err)
+		return fmt.Errorf("failed to push: %w", err)
 	}
 
 	return nil
 }
 
-// IsGitRepository 指定されたパスが Git リポジトリかどうかを確認する
+// IsGitRepository checks if the specified path is a Git repository
 //
 // Preconditions:
-// - repoPath が有効なディレクトリパスであること
+// - repoPath is a valid directory path
 //
 // Postconditions:
-// - Git リポジトリの場合は true、そうでない場合は false が返される
+// - Returns true if it's a Git repository, false otherwise
 //
 // Invariants:
-// - git rev-parse コマンドを使用して確認（より確実）
-// - フォールバックとして .git ディレクトリ/ファイルの存在も確認
+// - Uses git rev-parse command for verification (more reliable)
+// - Also checks for .git directory/file existence as fallback
 func IsGitRepository(repoPath string) bool {
-	// まず git rev-parse コマンドで確認（より確実な方法）
+	// First check with git rev-parse command (more reliable method)
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
 	cmd.Dir = repoPath
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err == nil {
-		// git rev-parse が成功した場合は Git リポジトリ
+		// If git rev-parse succeeds, it's a Git repository
 		return true
 	}
 
-	// git rev-parse が失敗した場合、フォールバックとして .git の存在を確認
+	// If git rev-parse fails, check for .git existence as fallback
 	absPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		return false
@@ -433,21 +433,21 @@ func IsGitRepository(repoPath string) bool {
 		return false
 	}
 
-	// ディレクトリ、ファイル、またはシンボリックリンクの場合は Git リポジトリとみなす
-	// (shallow clone の場合は .git がファイルになることがある)
+	// Consider it a Git repository if .git is a directory, file, or symbolic link
+	// (in shallow clones, .git can be a file)
 	return info.IsDir() || (info.Mode()&os.ModeSymlink != 0) || (info.Mode().IsRegular())
 }
 
-// GetCurrentBranch 現在のブランチ名を取得する
+// GetCurrentBranch gets the current branch name
 //
 // Preconditions:
-// - repoPath が有効な Git リポジトリのパスであること
+// - repoPath is a valid Git repository path
 //
 // Postconditions:
-// - 現在のブランチ名が返される
+// - Returns the current branch name
 //
 // Invariants:
-// - Git リポジトリが初期化されていることが前提
+// - Git repository must be initialized
 func GetCurrentBranch(repoPath string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = repoPath
@@ -458,7 +458,7 @@ func GetCurrentBranch(repoPath string) (string, error) {
 
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("現在のブランチの取得に失敗しました: %w\nstderr: %s", err, stderr.String())
+		return "", fmt.Errorf("failed to get current branch: %w\nstderr: %s", err, stderr.String())
 	}
 
 	return strings.TrimSpace(stdout.String()), nil

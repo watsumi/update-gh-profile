@@ -7,33 +7,33 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/aggregator"
 )
 
-// GenerateSummaryCard スター数、リポジトリ数、コミット数、PR数を表示するサマリーカードの SVG を生成する
+// GenerateSummaryCard generates an SVG summary card displaying stars, repositories, commits, and PRs
 //
 // Preconditions:
-// - stats が有効な SummaryStats 構造体であること
+// - stats is a valid SummaryStats struct
 //
 // Postconditions:
-// - 返される文字列は有効な SVG 形式である
-// - SVG には4つのメトリクス（スター、リポジトリ、コミット、PR）が表示される
+// - Returns a valid SVG string
+// - SVG displays 4 metrics (stars, repositories, commits, PRs)
 //
 // Invariants:
-// - すべてのメトリクスがカード形式で表示される
-// - アイコンと数値が適切に配置される
+// - All metrics are displayed in card format
+// - Icons and values are properly positioned
 func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
-	// SVG のサイズを設定
+	// Set SVG size
 	width := DefaultSVGWidth
 	height := 140
 	padding := 20
 	cardSpacing := 15
-	cardWidth := (width - padding*2 - cardSpacing*3) / 4 // 4つのカードを配置
+	cardWidth := (width - padding*2 - cardSpacing*3) / 4 // Arrange 4 cards
 
-	// SVG を構築
+	// Build SVG
 	var svg strings.Builder
 
-	// ヘッダー
+	// Header
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
 
-	// スタイル定義
+	// Style definitions
 	svg.WriteString(`  <defs>
     <filter id="cardShadow">
       <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
@@ -63,7 +63,7 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
     </linearGradient>
 `)
 
-	// 各カード用のグラデーション定義
+	// Gradient definitions for each card
 	for i := 0; i < 4; i++ {
 		svg.WriteString(fmt.Sprintf(`    <linearGradient id="cardGrad%d" x1="0%%" y1="0%%" x2="100%%" y2="100%%">
       <stop offset="0%%" style="stop-color:%s;stop-opacity:0.15" />
@@ -76,15 +76,15 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 
 `)
 
-	// 背景（グラデーション + ボーダー）
+	// Background (gradient + border)
 	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="url(#cardGrad)" rx="12" stroke="#30363d" stroke-width="1"/>
 `, width, height))
 
-	// タイトル（省略可能、カードだけでも見やすい）
-	// svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">統計サマリー</text>
+	// Title (optional, cards are readable without it)
+	// svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="%s" text-anchor="middle">Statistics Summary</text>
 	// `, width/2, 30, DefaultTextColor))
 
-	// メトリクス定義
+	// Metric definitions
 	type metric struct {
 		label string
 		value int
@@ -119,7 +119,7 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 		},
 	}
 
-	// 各メトリクスのカードを描画
+	// Draw cards for each metric
 	startX := padding
 	cardY := 40
 	iconSize := 32
@@ -130,55 +130,55 @@ func GenerateSummaryCard(stats aggregator.SummaryStats) (string, error) {
 	for i, m := range metrics {
 		cardX := startX + i*(cardWidth+cardSpacing)
 
-		// カードの背景（グラデーション + シャドウ）
+		// Card background (gradient + shadow)
 		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="url(#cardGrad%d)" rx="8" stroke="%s" stroke-width="1.5" opacity="0.8" filter="url(#cardShadow)"/>
 `, cardX, cardY, cardWidth, height-cardY-padding, i, m.color))
 
-		// アイコン（大きめ + グロー効果）
+		// Icon (large + glow effect)
 		iconX := cardX + cardWidth/2
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif" font-size="%d" text-anchor="middle" filter="url(#iconShadow)">%s</text>
 `, iconX, iconY, iconSize+2, m.icon))
 
-		// 数値（大きなフォント）
+		// Value (large font)
 		valueText := formatNumber(m.value)
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="600" fill="%s" text-anchor="middle">%s</text>
 `, iconX, valueY, DefaultTextColor, valueText))
 
-		// ラベル
+		// Label
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s" text-anchor="middle" opacity="0.7">%s</text>
 `, iconX, labelY, DefaultTextColor, m.label))
 	}
 
-	// フッター
+	// Footer
 	svg.WriteString(SVGFooter)
 
 	return svg.String(), nil
 }
 
-// formatNumber 数値を3桁区切りの文字列にフォーマットする
-// 例: 1234 -> "1,234", 1000000 -> "1M"
+// formatNumber formats a number into a string with comma separators
+// Examples: 1234 -> "1,234", 1000000 -> "1M"
 func formatNumber(n int) string {
 	if n < 0 {
 		return "0"
 	}
 
-	// 百万単位
+	// Millions
 	if n >= 1000000 {
 		return fmt.Sprintf("%.1fM", float64(n)/1000000.0)
 	}
 
-	// 千単位
+	// Thousands
 	if n >= 1000 {
 		return fmt.Sprintf("%.1fK", float64(n)/1000.0)
 	}
 
-	// 3桁区切り
+	// 3-digit comma separation
 	str := fmt.Sprintf("%d", n)
 	if len(str) <= 3 {
 		return str
 	}
 
-	// 3桁ごとにカンマを挿入
+	// Insert comma every 3 digits
 	result := ""
 	for i, r := range str {
 		if i > 0 && (len(str)-i)%3 == 0 {

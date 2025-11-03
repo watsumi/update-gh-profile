@@ -14,7 +14,7 @@ func TestGenerateSummaryCard(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name: "正常系: すべてのメトリクスに値がある",
+			name: "Normal case: all metrics have values",
 			stats: aggregator.SummaryStats{
 				TotalStars:        1234,
 				RepositoryCount:   56,
@@ -34,7 +34,7 @@ func TestGenerateSummaryCard(t *testing.T) {
 			},
 		},
 		{
-			name: "正常系: 大きな数値",
+			name: "Normal case: large numbers",
 			stats: aggregator.SummaryStats{
 				TotalStars:        1234567,
 				RepositoryCount:   890,
@@ -49,7 +49,7 @@ func TestGenerateSummaryCard(t *testing.T) {
 			},
 		},
 		{
-			name: "正常系: ゼロ値",
+			name: "Normal case: zero values",
 			stats: aggregator.SummaryStats{
 				TotalStars:        0,
 				RepositoryCount:   0,
@@ -74,7 +74,7 @@ func TestGenerateSummaryCard(t *testing.T) {
 				return
 			}
 
-			// SVG形式の基本的な検証
+			// Basic SVG format validation
 			if !strings.HasPrefix(svg, "<?xml") {
 				t.Errorf("GenerateSummaryCard() SVG should start with <?xml")
 			}
@@ -83,7 +83,7 @@ func TestGenerateSummaryCard(t *testing.T) {
 				t.Errorf("GenerateSummaryCard() SVG should contain <svg> tag")
 			}
 
-			// 期待される文字列が含まれているか確認
+			// Check if expected strings are contained
 			for _, want := range tt.wantContains {
 				if !strings.Contains(svg, want) {
 					t.Errorf("GenerateSummaryCard() should contain %q", want)
@@ -100,37 +100,37 @@ func TestFormatNumber(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "小さい数値",
+			name:     "Small number",
 			input:    123,
 			expected: "123",
 		},
 		{
-			name:     "3桁区切り",
+			name:     "3-digit comma separation",
 			input:    1234,
 			expected: "1,234",
 		},
 		{
-			name:     "大きな3桁区切り",
+			name:     "Large 3-digit comma separation",
 			input:    1234567,
 			expected: "1,234,567",
 		},
 		{
-			name:     "K単位",
+			name:     "K unit",
 			input:    1234,
 			expected: "1.2K",
 		},
 		{
-			name:     "M単位",
+			name:     "M unit",
 			input:    1234567,
 			expected: "1.2M",
 		},
 		{
-			name:     "ゼロ",
+			name:     "Zero",
 			input:    0,
 			expected: "0",
 		},
 		{
-			name:     "負の値",
+			name:     "Negative value",
 			input:    -100,
 			expected: "0",
 		},
@@ -140,7 +140,7 @@ func TestFormatNumber(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatNumber(tt.input)
 
-			// K/M単位の場合は正確な文字列ではなく、形式を確認
+			// For K/M units, verify format rather than exact string
 			if tt.input >= 1000000 {
 				if !strings.HasSuffix(result, "M") {
 					t.Errorf("formatNumber(%d) = %q, expected string ending with 'M'", tt.input, result)

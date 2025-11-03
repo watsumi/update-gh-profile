@@ -364,7 +364,7 @@ func FetchUserDetailsWithGraphQLGenerated(ctx context.Context, token string, use
 	return userDetails, nil
 }
 
-// ヘルパー関数
+// Helper functions
 func boolPtr(b bool) *bool {
 	return &b
 }

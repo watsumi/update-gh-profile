@@ -8,44 +8,44 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// HandleRateLimit API レート制限を検出し、適切に待機する
+// HandleRateLimit detects API rate limiting and waits appropriately
 //
 // Preconditions:
-// - resp が GitHub API レスポンスであること
+// - resp is a GitHub API response
 //
 // Postconditions:
-// - レート制限に達している場合は、制限解除まで待機する
+// - If rate limit is reached, waits until limit is reset
 //
 // Invariants:
-// - 待機時間はレスポンスヘッダーから計算される
+// - Wait duration is calculated from response headers
 func HandleRateLimit(ctx context.Context, resp *github.Response) error {
-	// レート制限の状態を確認
+	// Check rate limit status
 	if resp.Rate.Remaining == 0 {
-		// レート制限に達している場合
-		// Reset はレート制限がリセットされる時刻（time.Time型）
+		// Rate limit reached
+		// Reset is the time when rate limit will be reset (time.Time type)
 		resetTime := resp.Rate.Reset.Time
 		waitDuration := time.Until(resetTime)
 
-		// 待機時間が負の場合は0にする（既にリセット済み）
+		// Set wait duration to 0 if negative (already reset)
 		if waitDuration < 0 {
 			waitDuration = 0
 		}
 
-		// 待機時間に少し余裕を追加（1秒）
+		// Add a small buffer to wait duration (1 second)
 		waitDuration += time.Second
 
 		if waitDuration > 0 {
-			log.Printf("レート制限に達しました。%v 待機します...", waitDuration)
+			log.Printf("Rate limit reached. Waiting %v...", waitDuration)
 			select {
 			case <-ctx.Done():
-				return ctx.Err() // コンテキストがキャンセルされた場合
+				return ctx.Err() // Context was cancelled
 			case <-time.After(waitDuration):
-				// 待機完了
+				// Wait completed
 			}
 		}
 	} else {
-		// レート制限に余裕がある場合は、残りリクエスト数をログに記録
-		log.Printf("レート制限の残り: %d/%d (リセット時刻: %v)",
+		// Log remaining requests if rate limit has room
+		log.Printf("Rate limit remaining: %d/%d (reset time: %v)",
 			resp.Rate.Remaining,
 			resp.Rate.Limit,
 			resp.Rate.Reset.Time.Format("2006-01-02 15:04:05"))

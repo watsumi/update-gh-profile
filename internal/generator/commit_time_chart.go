@@ -7,26 +7,26 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/aggregator"
 )
 
-// GenerateCommitTimeChart コミットが多い時間帯を表示する SVG グラフを生成する
+// GenerateCommitTimeChart generates an SVG chart showing commit time distribution
 //
 // Preconditions:
-// - timeDistribution が map[int]int{時間帯: コミット数} の形式であること
+// - timeDistribution is in the format map[int]int{time slot: commit count}
 //
 // Postconditions:
-// - 返される文字列は有効な SVG 形式である
-// - SVG には時間帯ごとのコミット数が表示される
+// - Returns a valid SVG string
+// - SVG displays commit count per time slot
 //
 // Invariants:
-// - 24時間すべての時間帯が表示される（データがない時間帯は0として表示）
+// - All 24 hours are displayed (time slots with no data are shown as 0)
 func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 	if len(timeDistribution) == 0 {
 		return generateEmptyChart("Commit Time Distribution", "No data available"), nil
 	}
 
-	// 時間帯順でソート
+	// Sort by time slot
 	sortedPairs := aggregator.SortCommitTimeDistributionByHour(timeDistribution)
 
-	// 24時間すべてのデータを確保（データがない時間帯は0）
+	// Ensure data for all 24 hours (time slots with no data are 0)
 	hourlyData := make(map[int]int)
 	for i := 0; i < 24; i++ {
 		hourlyData[i] = 0
@@ -37,7 +37,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 		}
 	}
 
-	// 最大コミット数を取得（色の濃さを決定するため）
+	// Get maximum commit count (to determine color intensity)
 	maxCommits := 0
 	for _, count := range hourlyData {
 		if count > maxCommits {
@@ -45,23 +45,23 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 		}
 	}
 	if maxCommits == 0 {
-		maxCommits = 1 // 0除算を防ぐ
+		maxCommits = 1 // Prevent division by zero
 	}
 
-	// SVG のサイズを設定
+	// Set SVG size
 	width := DefaultSVGWidth
 	height := 200
 	padding := 20
 	chartWidth := width - padding*2
-	chartHeight := height - padding*2 - 60 // タイトルとラベルのスペース
+	chartHeight := height - padding*2 - 60 // Space for title and labels
 
-	// SVG を構築
+	// Build SVG
 	var svg strings.Builder
 
-	// ヘッダー
+	// Header
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
 
-	// スタイル定義
+	// Style definitions
 	svg.WriteString(`  <defs>
     <linearGradient id="timeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:1" />
@@ -79,15 +79,15 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 
 `)
 
-	// 背景（ボーダー付き）
+	// Background (with border)
 	svg.WriteString(fmt.Sprintf(`  <rect width="%d" height="%d" fill="%s" rx="10" stroke="#30363d" stroke-width="1"/>
 `, width, height, DefaultBackgroundColor))
 
-	// タイトル（装飾付き）
+	// Title (decorated)
 	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="%s" text-anchor="middle">🕐 Commit Time Distribution (UTC)</text>
 `, width/2, 37, AccentColor))
 
-	// ヒートマップ形式で表示
+	// Display in heatmap format
 	barWidth := float64(chartWidth) / 24.0
 	barHeight := float64(chartHeight)
 	startX := float64(padding)
@@ -96,32 +96,32 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 		count := hourlyData[hour]
 		x := startX + float64(hour)*barWidth
 
-		// コミット数の比率に基づいて色の濃さを決定
+		// Determine color intensity based on commit count ratio
 		intensity := float64(count) / float64(maxCommits)
 		if intensity > 1.0 {
 			intensity = 1.0
 		}
 
-		// 色を計算（コミット数が多いほど濃い）
+		// Calculate color (higher commit count = darker color)
 		baseColor := "#58a6ff"
 		if intensity > 0.8 {
-			baseColor = "#1f6feb" // 最も濃い
+			baseColor = "#1f6feb" // Darkest
 		} else if intensity > 0.6 {
-			baseColor = "#388bfd" // 濃い
+			baseColor = "#388bfd" // Dark
 		} else if intensity > 0.4 {
-			baseColor = "#58a6ff" // 中程度
+			baseColor = "#58a6ff" // Medium
 		} else if intensity > 0.2 {
-			baseColor = "#79c0ff" // 薄い
+			baseColor = "#79c0ff" // Light
 		} else if intensity > 0 {
-			baseColor = "#b1ddff" // 最も薄い
+			baseColor = "#b1ddff" // Lightest
 		} else {
-			baseColor = "#21262d" // データなし
+			baseColor = "#21262d" // No data
 		}
 
-		// バーを描画
+		// Draw bar
 		barHeightScaled := barHeight * intensity
 		if barHeightScaled < 5 && count > 0 {
-			barHeightScaled = 5 // 最小の高さを確保
+			barHeightScaled = 5 // Ensure minimum height
 		}
 
 		y := float64(height-padding) - barHeightScaled
@@ -129,29 +129,29 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 		svg.WriteString(fmt.Sprintf(`  <rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s" rx="3" filter="url(#barGlow)" opacity="0.9"/>
 `, x+1, y, barWidth-2, barHeightScaled, baseColor))
 
-		// 時間帯ラベル（6時間ごと）
+		// Time slot label (every 6 hours)
 		if hour%6 == 0 {
 			svg.WriteString(fmt.Sprintf(`  <text x="%.1f" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="10" fill="%s" text-anchor="middle">%02d:00</text>
 `, x+barWidth/2, height-padding+15, DefaultTextColor, hour))
 		}
 
-		// コミット数が0より大きい場合は数値を表示（小さなテキスト）
+		// Display count if greater than 0 (small text)
 		if count > 0 {
 			textY := y - 3
 			if textY < float64(padding+20) {
-				textY = y + 12 // バーの上に表示するスペースがない場合は下に
+				textY = y + 12 // Display below if there's no space above the bar
 			}
 			svg.WriteString(fmt.Sprintf(`  <text x="%.1f" y="%.1f" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="8" fill="%s" text-anchor="middle" opacity="0.8">%d</text>
 `, x+barWidth/2, textY, DefaultTextColor, count))
 		}
 	}
 
-	// 凡例（コミット数が多い順に色の説明）
+	// Legend (color explanation sorted by commit count)
 	legendY := height - padding - chartHeight - 25
 	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">High</text>
 `, padding, legendY, DefaultTextColor))
 
-	// カラーバーを表示
+	// Display color bar
 	for i := 0; i < 5; i++ {
 		color := []string{"#1f6feb", "#388bfd", "#58a6ff", "#79c0ff", "#b1ddff"}[i]
 		x := padding + 40 + (i * 25)
@@ -162,7 +162,7 @@ func GenerateCommitTimeChart(timeDistribution map[int]int) (string, error) {
 	svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="11" fill="%s">Low</text>
 `, padding+40+125, legendY, DefaultTextColor))
 
-	// フッター
+	// Footer
 	svg.WriteString(SVGFooter)
 
 	return svg.String(), nil

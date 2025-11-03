@@ -6,75 +6,75 @@ import (
 	"path/filepath"
 )
 
-// SaveSVG SVG コンテンツをファイルに保存する
+// SaveSVG saves SVG content to a file
 //
 // Preconditions:
-// - svgContent が有効な SVG 文字列であること
-// - filePath が有効なファイルパスであること
+// - svgContent is a valid SVG string
+// - filePath is a valid file path
 //
 // Postconditions:
-// - 指定されたパスに SVG ファイルが作成される
-// - ファイルのエンコーディングは UTF-8 である
+// - SVG file is created at the specified path
+// - File encoding is UTF-8
 //
 // Invariants:
-// - ディレクトリが存在しない場合は自動作成される
-// - 既存のファイルがある場合は上書きされる
+// - Directories are automatically created if they don't exist
+// - Existing files are overwritten
 func SaveSVG(svgContent, filePath string) error {
 	if svgContent == "" {
-		return fmt.Errorf("SVG コンテンツが空です")
+		return fmt.Errorf("SVG content is empty")
 	}
 
 	if filePath == "" {
-		return fmt.Errorf("ファイルパスが空です")
+		return fmt.Errorf("file path is empty")
 	}
 
-	// ディレクトリが存在しない場合は作成
+	// Create directory if it doesn't exist
 	dir := filepath.Dir(filePath)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("ディレクトリの作成に失敗しました: %w", err)
+			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
 
-	// SVG ファイルを UTF-8 エンコーディングで保存
-	// os.WriteFile は UTF-8 で書き込むため、明示的なエンコーディング指定は不要
+	// Save SVG file with UTF-8 encoding
+	// os.WriteFile writes in UTF-8, so explicit encoding specification is not needed
 	err := os.WriteFile(filePath, []byte(svgContent), 0644)
 	if err != nil {
-		return fmt.Errorf("SVG ファイルの保存に失敗しました: %w", err)
+		return fmt.Errorf("failed to save SVG file: %w", err)
 	}
 
 	return nil
 }
 
-// SaveMultipleSVGs 複数の SVG を一度に保存する
+// SaveMultipleSVGs saves multiple SVG files at once
 //
 // Preconditions:
-// - svgs が map[ファイル名]SVGコンテンツ の形式であること
-// - outputDir が有効なディレクトリパスであること
+// - svgs is in the format map[filename]SVG content
+// - outputDir is a valid directory path
 //
 // Postconditions:
-// - 各 SVG ファイルが outputDir に保存される
-// - すべてのファイルが正常に保存される、またはエラーが返される
+// - Each SVG file is saved to outputDir
+// - All files are saved successfully, or an error is returned
 //
 // Invariants:
-// - すべてのファイルが同じディレクトリに保存される
+// - All files are saved to the same directory
 func SaveMultipleSVGs(svgs map[string]string, outputDir string) error {
 	if len(svgs) == 0 {
-		return fmt.Errorf("保存する SVG ファイルがありません")
+		return fmt.Errorf("no SVG files to save")
 	}
 
 	if outputDir == "" {
 		outputDir = "."
 	}
 
-	// ディレクトリが存在しない場合は作成
+	// Create directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return fmt.Errorf("ディレクトリの作成に失敗しました: %w", err)
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// 各 SVG を保存
+	// Save each SVG
 	for filename, content := range svgs {
-		// .svg 拡張子がない場合は追加
+		// Add .svg extension if not present
 		if filepath.Ext(filename) != ".svg" {
 			filename = filename + ".svg"
 		}
@@ -82,7 +82,7 @@ func SaveMultipleSVGs(svgs map[string]string, outputDir string) error {
 		filepath := filepath.Join(outputDir, filename)
 
 		if err := SaveSVG(content, filepath); err != nil {
-			return fmt.Errorf("ファイル %s の保存に失敗しました: %w", filename, err)
+			return fmt.Errorf("failed to save file %s: %w", filename, err)
 		}
 	}
 

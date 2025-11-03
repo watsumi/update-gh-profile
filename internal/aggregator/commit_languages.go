@@ -32,6 +32,9 @@ func AggregateCommitLanguages(commitLanguages map[string]map[string]int, exclude
 			excludedMap[normalized] = true
 		}
 	}
+	if len(excludedMap) > 0 {
+		log.Printf("Excluded languages (normalized): %v", excludedMap)
+	}
 
 	// Map to aggregate usage count per language
 	languageCounts := make(map[string]int)
@@ -45,9 +48,10 @@ func AggregateCommitLanguages(commitLanguages map[string]map[string]int, exclude
 		}
 		log.Printf("  Commit %s: %d languages used", shaDisplay, len(langs))
 		for lang, count := range langs {
-			// Skip excluded languages
-			normalized := strings.ToLower(lang)
+			// Skip excluded languages (case-insensitive comparison)
+			normalized := strings.ToLower(strings.TrimSpace(lang))
 			if excludedMap[normalized] {
+				log.Printf("    Excluding language: %s (normalized: %s)", lang, normalized)
 				continue
 			}
 			languageCounts[lang] += count

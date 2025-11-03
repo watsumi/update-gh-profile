@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-// LogLevel ログレベル
+// LogLevel log level
 type LogLevel int
 
 const (
@@ -17,13 +17,13 @@ const (
 	LogLevelError
 )
 
-// Logger ロガー構造体
+// Logger logger struct
 type Logger struct {
 	level  LogLevel
 	logger *log.Logger
 }
 
-// NewLogger 新しいロガーを作成する
+// NewLogger creates a new logger
 func NewLogger(level LogLevel, output io.Writer) *Logger {
 	if output == nil {
 		output = os.Stderr
@@ -35,46 +35,46 @@ func NewLogger(level LogLevel, output io.Writer) *Logger {
 	}
 }
 
-// SetLevel ログレベルを設定する
+// SetLevel sets the log level
 func (l *Logger) SetLevel(level LogLevel) {
 	l.level = level
 }
 
-// Debug デバッグレベルのログを出力する
+// Debug outputs debug level log
 func (l *Logger) Debug(format string, args ...interface{}) {
 	if l.level <= LogLevelDebug {
 		l.logger.Printf("[DEBUG] "+format, args...)
 	}
 }
 
-// Info 情報レベルのログを出力する
+// Info outputs info level log
 func (l *Logger) Info(format string, args ...interface{}) {
 	if l.level <= LogLevelInfo {
 		l.logger.Printf("[INFO] "+format, args...)
 	}
 }
 
-// Warning 警告レベルのログを出力する
+// Warning outputs warning level log
 func (l *Logger) Warning(format string, args ...interface{}) {
 	if l.level <= LogLevelWarning {
 		l.logger.Printf("[WARNING] "+format, args...)
 	}
 }
 
-// Error エラーレベルのログを出力する
+// Error outputs error level log
 func (l *Logger) Error(format string, args ...interface{}) {
 	if l.level <= LogLevelError {
 		l.logger.Printf("[ERROR] "+format, args...)
 	}
 }
 
-// Fatal 致命的エラーレベルのログを出力して終了する
+// Fatal outputs fatal error level log and exits
 func (l *Logger) Fatal(format string, args ...interface{}) {
 	l.logger.Printf("[FATAL] "+format, args...)
 	os.Exit(1)
 }
 
-// ParseLogLevel 文字列から LogLevel を解析する
+// ParseLogLevel parses LogLevel from string
 func ParseLogLevel(levelStr string) LogLevel {
 	switch levelStr {
 	case "debug", "DEBUG":
@@ -86,11 +86,11 @@ func ParseLogLevel(levelStr string) LogLevel {
 	case "error", "ERROR":
 		return LogLevelError
 	default:
-		return LogLevelInfo // デフォルトは Info
+		return LogLevelInfo // Default is Info
 	}
 }
 
-// String LogLevel を文字列に変換する
+// String converts LogLevel to string
 func (l LogLevel) String() string {
 	switch l {
 	case LogLevelDebug:
@@ -106,10 +106,10 @@ func (l LogLevel) String() string {
 	}
 }
 
-// DefaultLogger デフォルトのロガーインスタンス
+// DefaultLogger default logger instance
 var DefaultLogger = NewLogger(LogLevelInfo, os.Stderr)
 
-// 便利な関数（DefaultLogger を使用）
+// Convenience functions (using DefaultLogger)
 func Debug(format string, args ...interface{}) {
 	DefaultLogger.Debug(format, args...)
 }
@@ -130,7 +130,7 @@ func Fatal(format string, args ...interface{}) {
 	DefaultLogger.Fatal(format, args...)
 }
 
-// LogError エラーをログに記録する（エラーが nil の場合は何もしない）
+// LogError logs an error (does nothing if error is nil)
 func LogError(err error, format string, args ...interface{}) error {
 	if err != nil {
 		msg := fmt.Sprintf(format, args...)
@@ -139,7 +139,7 @@ func LogError(err error, format string, args ...interface{}) error {
 	return err
 }
 
-// LogErrorWithContext エラーをコンテキスト情報とともにログに記録する
+// LogErrorWithContext logs an error with context information
 func LogErrorWithContext(err error, context string, format string, args ...interface{}) error {
 	if err != nil {
 		msg := fmt.Sprintf(format, args...)

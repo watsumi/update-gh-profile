@@ -5,52 +5,52 @@ import (
 	"sort"
 )
 
-// AggregateCommitHistory 日付ごとのコミット数を集計する
+// AggregateCommitHistory aggregates commit counts by date
 //
 // Preconditions:
-// - commitHistories が map[string]map[string]int{リポジトリ名: {日付: コミット数}} の形式であること
+// - commitHistories is in the format map[string]map[string]int{repository name: {date: commit count}}
 //
 // Postconditions:
-// - 返される map は map[string]int{日付: 合計コミット数} の形式である
-// - 日付は YYYY-MM-DD 形式で記録される
+// - Returns a map in the format map[string]int{date: total commit count}
+// - Dates are recorded in YYYY-MM-DD format
 //
 // Invariants:
-// - 全リポジトリの日付ごとのコミット数が合算される
+// - Commit counts per date from all repositories are summed
 func AggregateCommitHistory(commitHistories map[string]map[string]int) map[string]int {
-	log.Printf("コミット履歴の集計を開始: %d リポジトリ", len(commitHistories))
+	log.Printf("Starting commit history aggregation: %d repositories", len(commitHistories))
 
-	// 日付ごとの合計コミット数を格納する map
+	// Map to store total commit counts per date
 	aggregated := make(map[string]int)
 
-	// 各リポジトリのコミット履歴を集計
+	// Aggregate commit history for each repository
 	for repoName, history := range commitHistories {
-		log.Printf("  %s: %d 日分のコミット履歴を集計中", repoName, len(history))
+		log.Printf("  %s: aggregating commit history for %d days", repoName, len(history))
 		for date, count := range history {
 			aggregated[date] += count
 		}
 	}
 
-	log.Printf("コミット履歴の集計完了: %d 日分", len(aggregated))
+	log.Printf("Commit history aggregation completed: %d days", len(aggregated))
 	return aggregated
 }
 
-// SortCommitHistoryByDate コミット履歴を日付順でソートする
+// SortCommitHistoryByDate sorts commit history by date
 //
 // Preconditions:
-// - commitHistory が map[string]int{日付: コミット数} の形式であること
+// - commitHistory is in the format map[string]int{date: commit count}
 //
 // Postconditions:
-// - 返されるスライスは日付順（昇順）にソートされた日付とコミット数のペアのスライスである
+// - Returns a slice of date and commit count pairs sorted by date (ascending)
 //
 // Invariants:
-// - 日付は YYYY-MM-DD 形式で記録される
-// - ソート順序は日付の文字列比較で行われる（YYYY-MM-DD形式なので正しくソートされる）
+// - Dates are recorded in YYYY-MM-DD format
+// - Sort order is based on string comparison of dates (correctly sorted due to YYYY-MM-DD format)
 func SortCommitHistoryByDate(commitHistory map[string]int) []DateCommitPair {
 	if len(commitHistory) == 0 {
 		return []DateCommitPair{}
 	}
 
-	// DateCommitPair スライスを作成
+	// Create DateCommitPair slice
 	var pairs []DateCommitPair
 	for date, count := range commitHistory {
 		pairs = append(pairs, DateCommitPair{
@@ -59,7 +59,7 @@ func SortCommitHistoryByDate(commitHistory map[string]int) []DateCommitPair {
 		})
 	}
 
-	// 日付順（昇順）でソート
+	// Sort by date (ascending)
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].Date < pairs[j].Date
 	})
@@ -67,65 +67,65 @@ func SortCommitHistoryByDate(commitHistory map[string]int) []DateCommitPair {
 	return pairs
 }
 
-// DateCommitPair 日付とコミット数のペア
+// DateCommitPair date and commit count pair
 type DateCommitPair struct {
-	Date  string // 日付（YYYY-MM-DD形式）
-	Count int    // コミット数
+	Date  string // Date (YYYY-MM-DD format)
+	Count int    // Commit count
 }
 
-// AggregateCommitTimeDistribution 時間帯ごとのコミット数を集計する
+// AggregateCommitTimeDistribution aggregates commit counts by time slot
 //
 // Preconditions:
-// - timeDistributions が map[string]map[int]int{リポジトリ名: {時間帯: コミット数}} の形式であること
+// - timeDistributions is in the format map[string]map[int]int{repository name: {time slot: commit count}}
 //
 // Postconditions:
-// - 返される map は map[int]int{時間帯: 合計コミット数} の形式である
-// - 時間帯は 0-23 の範囲で記録される
+// - Returns a map in the format map[int]int{time slot: total commit count}
+// - Time slots are recorded in the range 0-23
 //
 // Invariants:
-// - 全リポジトリの時間帯ごとのコミット数が合算される
+// - Commit counts per time slot from all repositories are summed
 func AggregateCommitTimeDistribution(timeDistributions map[string]map[int]int) map[int]int {
-	log.Printf("コミット時間帯分布の集計を開始: %d リポジトリ", len(timeDistributions))
+	log.Printf("Starting commit time distribution aggregation: %d repositories", len(timeDistributions))
 
-	// 時間帯ごとの合計コミット数を格納する map（0-23時）
+	// Map to store total commit counts per time slot (0-23 hours)
 	aggregated := make(map[int]int)
 
-	// 各リポジトリの時間帯分布を集計
+	// Aggregate time distribution for each repository
 	for repoName, distribution := range timeDistributions {
-		log.Printf("  %s: %d 時間帯分のデータを集計中", repoName, len(distribution))
+		log.Printf("  %s: aggregating data for %d time slots", repoName, len(distribution))
 		for hour, count := range distribution {
-			// 時間帯が0-23の範囲内であることを確認
+			// Verify time slot is within 0-23 range
 			if hour < 0 || hour > 23 {
-				log.Printf("警告: リポジトリ %s の時間帯 %d が範囲外です。スキップします", repoName, hour)
+				log.Printf("Warning: time slot %d for repository %s is out of range. Skipping", hour, repoName)
 				continue
 			}
 			aggregated[hour] += count
 		}
 	}
 
-	log.Printf("コミット時間帯分布の集計完了: %d 時間帯", len(aggregated))
+	log.Printf("Commit time distribution aggregation completed: %d time slots", len(aggregated))
 	return aggregated
 }
 
-// SortCommitTimeDistributionByHour コミット時間帯分布を時間帯順でソートする
+// SortCommitTimeDistributionByHour sorts commit time distribution by time slot
 //
 // Preconditions:
-// - timeDistribution が map[int]int{時間帯: コミット数} の形式であること
+// - timeDistribution is in the format map[int]int{time slot: commit count}
 //
 // Postconditions:
-// - 返されるスライスは時間帯順（昇順、0-23時）にソートされた時間帯とコミット数のペアのスライスである
+// - Returns a slice of time slot and commit count pairs sorted by time slot (ascending, 0-23 hours)
 //
 // Invariants:
-// - 時間帯は 0-23 の範囲で記録される
+// - Time slots are recorded in the range 0-23
 func SortCommitTimeDistributionByHour(timeDistribution map[int]int) []HourCommitPair {
 	if len(timeDistribution) == 0 {
 		return []HourCommitPair{}
 	}
 
-	// HourCommitPair スライスを作成
+	// Create HourCommitPair slice
 	var pairs []HourCommitPair
 	for hour, count := range timeDistribution {
-		// 範囲チェック
+		// Range check
 		if hour < 0 || hour > 23 {
 			continue
 		}
@@ -135,7 +135,7 @@ func SortCommitTimeDistributionByHour(timeDistribution map[int]int) []HourCommit
 		})
 	}
 
-	// 時間帯順（昇順）でソート
+	// Sort by time slot (ascending)
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].Hour < pairs[j].Hour
 	})
@@ -143,8 +143,8 @@ func SortCommitTimeDistributionByHour(timeDistribution map[int]int) []HourCommit
 	return pairs
 }
 
-// HourCommitPair 時間帯とコミット数のペア
+// HourCommitPair time slot and commit count pair
 type HourCommitPair struct {
-	Hour  int // 時間帯（0-23時）
-	Count int // コミット数
+	Hour  int // Time slot (0-23 hours)
+	Count int // Commit count
 }

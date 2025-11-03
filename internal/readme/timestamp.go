@@ -6,92 +6,92 @@ import (
 	"time"
 )
 
-// FormatTimestamp タイムスタンプをフォーマットする
+// FormatTimestamp formats a timestamp
 //
 // Preconditions:
-// - t が有効な time.Time であること
-// - format が有効なフォーマット文字列であること（省略可能、デフォルトは RFC3339）
+// - t is a valid time.Time
+// - format is a valid format string (optional, default is RFC3339)
 //
 // Postconditions:
-// - フォーマットされたタイムスタンプ文字列が返される
+// - Returns formatted timestamp string
 //
 // Invariants:
-// - タイムゾーン情報が含まれる
+// - Timezone information is included
 func FormatTimestamp(t time.Time, format string) string {
 	if format == "" {
-		// デフォルトフォーマット: RFC3339 (例: 2024-01-15T10:30:00Z09:00)
+		// Default format: RFC3339 (e.g., 2024-01-15T10:30:00Z09:00)
 		return t.Format(time.RFC3339)
 	}
 
 	return t.Format(format)
 }
 
-// FormatTimestampWithTimezone タイムゾーンを指定してタイムスタンプをフォーマットする
+// FormatTimestampWithTimezone formats a timestamp with specified timezone
 //
 // Preconditions:
-// - t が有効な time.Time であること
-// - timezone が有効なタイムゾーン名であること（例: "Asia/Tokyo", "UTC"）
+// - t is a valid time.Time
+// - timezone is a valid timezone name (e.g., "Asia/Tokyo", "UTC")
 //
 // Postconditions:
-// - 指定されたタイムゾーンでフォーマットされたタイムスタンプ文字列が返される
+// - Returns formatted timestamp string in specified timezone
 //
 // Invariants:
-// - タイムゾーン情報が正しく適用される
+// - Timezone information is correctly applied
 func FormatTimestampWithTimezone(t time.Time, timezone string) (string, error) {
-	// タイムゾーンを読み込む
+	// Load timezone
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		return "", fmt.Errorf("タイムゾーンの読み込みに失敗しました: %w", err)
+		return "", fmt.Errorf("failed to load timezone: %w", err)
 	}
 
-	// 指定されたタイムゾーンに変換
+	// Convert to specified timezone
 	localTime := t.In(loc)
 
-	// RFC3339 フォーマットで返す
+	// Return in RFC3339 format
 	return localTime.Format(time.RFC3339), nil
 }
 
-// AddUpdateTimestamp README.md の指定セクションに更新日時を追加する
+// AddUpdateTimestamp adds update timestamp to specified section in README.md
 //
 // Preconditions:
-// - readmePath が有効な README.md ファイルパスであること
-// - sectionTag が更新するセクションのタグ名であること
-// - timestamp が有効な time.Time であること（省略可能、デフォルトは現在時刻）
+// - readmePath is a valid README.md file path
+// - sectionTag is the tag name of the section to update
+// - timestamp is a valid time.Time (optional, default is current time)
 //
 // Postconditions:
-// - README.md の指定セクションに更新日時が追加される
-// - 既存のコンテンツの後に追加される
+// - Update timestamp is added to specified section in README.md
+// - Added after existing content
 //
 // Invariants:
-// - タイムスタンプは明確な形式で表示される
+// - Timestamp is displayed in a clear format
 func AddUpdateTimestamp(readmePath, sectionTag string, timestamp time.Time, timezone string) error {
-	// セクションタグを正規化
+	// Normalize section tags
 	startTag, endTag := NormalizeTags(sectionTag)
 
-	// README ファイルを読み込む
+	// Read README file
 	content, err := ReadFile(readmePath)
 	if err != nil {
-		return fmt.Errorf("README ファイルの読み込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to read README file: %w", err)
 	}
 
-	// 既存のセクションコンテンツを取得（エラーは無視して空文字列を扱う）
+	// Get existing section content (ignore errors and treat as empty string)
 	sectionContent, _ := FindSection(content, startTag, endTag)
 
-	// タイムスタンプをフォーマット
+	// Format timestamp
 	var timestampStr string
 	if timezone != "" {
 		timestampStr, err = FormatTimestampWithTimezone(timestamp, timezone)
 		if err != nil {
-			return fmt.Errorf("タイムスタンプのフォーマットに失敗しました: %w", err)
+			return fmt.Errorf("failed to format timestamp: %w", err)
 		}
 	} else {
 		timestampStr = FormatTimestamp(timestamp, "")
 	}
 
-	// 更新日時のマークダウンを生成
-	timestampMarkdown := fmt.Sprintf("\n\n*最終更新: %s*", timestampStr)
+	// Generate timestamp markdown
+	timestampMarkdown := fmt.Sprintf("\n\n*Last updated: %s*", timestampStr)
 
-	// 新しいコンテンツを作成（既存コンテンツ + タイムスタンプ）
+	// Create new content (existing content + timestamp)
 	newContent := sectionContent
 	if sectionContent != "" {
 		newContent += timestampMarkdown
@@ -99,25 +99,25 @@ func AddUpdateTimestamp(readmePath, sectionTag string, timestamp time.Time, time
 		newContent = strings.TrimPrefix(timestampMarkdown, "\n\n")
 	}
 
-	// セクションを更新（タグがない場合は自動追加される）
+	// Update section (tags are automatically added if they don't exist)
 	err = UpdateSection(readmePath, startTag, endTag, newContent)
 	if err != nil {
-		return fmt.Errorf("セクションの更新に失敗しました: %w", err)
+		return fmt.Errorf("failed to update section: %w", err)
 	}
 
 	return nil
 }
 
-// GenerateTimestampMarkdown タイムスタンプの Markdown 形式を生成する
+// GenerateTimestampMarkdown generates Markdown format for timestamp
 //
 // Preconditions:
-// - timestamp が有効な time.Time であること
+// - timestamp is a valid time.Time
 //
 // Postconditions:
-// - Markdown 形式のタイムスタンプ文字列が返される
+// - Returns timestamp string in Markdown format
 //
 // Invariants:
-// - フォーマットは一貫している
+// - Format is consistent
 func GenerateTimestampMarkdown(timestamp time.Time, timezone string) (string, error) {
 	var timestampStr string
 	var err error
@@ -125,25 +125,25 @@ func GenerateTimestampMarkdown(timestamp time.Time, timezone string) (string, er
 	if timezone != "" {
 		timestampStr, err = FormatTimestampWithTimezone(timestamp, timezone)
 		if err != nil {
-			return "", fmt.Errorf("タイムスタンプのフォーマットに失敗しました: %w", err)
+			return "", fmt.Errorf("failed to format timestamp: %w", err)
 		}
 	} else {
 		timestampStr = FormatTimestamp(timestamp, "")
 	}
 
-	return fmt.Sprintf("*最終更新: %s*", timestampStr), nil
+	return fmt.Sprintf("*Last updated: %s*", timestampStr), nil
 }
 
-// GetCurrentTimestamp 現在のタイムスタンプを取得する
+// GetCurrentTimestamp gets current timestamp
 //
 // Preconditions:
-// - なし
+// - None
 //
 // Postconditions:
-// - 現在の時刻が time.Time として返される
+// - Returns current time as time.Time
 //
 // Invariants:
-// - UTC タイムゾーンで返される
+// - Returns in UTC timezone
 func GetCurrentTimestamp() time.Time {
 	return time.Now().UTC()
 }

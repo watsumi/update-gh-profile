@@ -6,30 +6,30 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// AggregateSummaryStats サマリー統計を集計する
+// AggregateSummaryStats aggregates summary statistics
 //
 // Preconditions:
-// - repositories がリポジトリ構造体のスライスであること
-// - totalCommits が全リポジトリの総コミット数であること
-// - totalPRs が全リポジトリの総プルリクエスト数であること
+// - repositories is a slice of repository structs
+// - totalCommits is the total number of commits across all repositories
+// - totalPRs is the total number of pull requests across all repositories
 //
 // Postconditions:
-// - 返される構造体には合計スター数、リポジトリ数、総コミット数、総PR数が含まれる
+// - Returns a struct containing total stars, repository count, total commits, and total PRs
 //
 // Invariants:
-// - 全リポジトリの値を合算する
-// - フォークリポジトリは除外される（repositoriesで既に除外されている前提）
+// - Sums values from all repositories
+// - Fork repositories are excluded (assumes already excluded in repositories)
 func AggregateSummaryStats(repositories []*github.Repository, totalCommits, totalPRs int) SummaryStats {
-	log.Printf("サマリー統計の集計を開始: %d リポジトリ", len(repositories))
+	log.Printf("Starting summary statistics aggregation: %d repositories", len(repositories))
 
 	var stats SummaryStats
 
-	// リポジトリ数をカウント（フォークは既に除外されている前提だが、念のため）
+	// Count repositories (forks are already excluded in the assumption, but double-check)
 	stats.RepositoryCount = 0
 	totalStars := 0
 
 	for _, repo := range repositories {
-		// フォークリポジトリはスキップ（repositoriesで既に除外されている前提だが、念のため）
+		// Skip fork repositories (assumes already excluded, but double-check)
 		if repo.GetFork() {
 			continue
 		}
@@ -42,11 +42,11 @@ func AggregateSummaryStats(repositories []*github.Repository, totalCommits, tota
 	stats.TotalCommits = totalCommits
 	stats.TotalPullRequests = totalPRs
 
-	log.Printf("サマリー統計の集計完了:")
-	log.Printf("  - 合計スター数: %d", stats.TotalStars)
-	log.Printf("  - リポジトリ数: %d", stats.RepositoryCount)
-	log.Printf("  - 総コミット数: %d", stats.TotalCommits)
-	log.Printf("  - 総プルリクエスト数: %d", stats.TotalPullRequests)
+	log.Printf("Summary statistics aggregation completed:")
+	log.Printf("  - Total stars: %d", stats.TotalStars)
+	log.Printf("  - Repository count: %d", stats.RepositoryCount)
+	log.Printf("  - Total commits: %d", stats.TotalCommits)
+	log.Printf("  - Total pull requests: %d", stats.TotalPullRequests)
 
 	return stats
 }

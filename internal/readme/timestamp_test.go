@@ -18,19 +18,19 @@ func TestFormatTimestamp(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "デフォルトフォーマット（RFC3339）",
+			name:   "Default format (RFC3339)",
 			t:      timestamp,
 			format: "",
 			want:   "2024-01-15T10:30:00Z",
 		},
 		{
-			name:   "カスタムフォーマット",
+			name:   "Custom format",
 			t:      timestamp,
 			format: "2006-01-02 15:04:05",
 			want:   "2024-01-15 10:30:00",
 		},
 		{
-			name:   "日付のみフォーマット",
+			name:   "Date only format",
 			t:      timestamp,
 			format: "2006-01-02",
 			want:   "2024-01-15",
@@ -55,24 +55,24 @@ func TestFormatTimestampWithTimezone(t *testing.T) {
 		t        time.Time
 		timezone string
 		wantErr  bool
-		contains string // 期待される文字列が含まれるか
+		contains string // Expected string to be contained
 	}{
 		{
-			name:     "UTC タイムゾーン",
+			name:     "UTC timezone",
 			t:        timestamp,
 			timezone: "UTC",
 			wantErr:  false,
 			contains: "2024-01-15T10:30:00Z",
 		},
 		{
-			name:     "Asia/Tokyo タイムゾーン",
+			name:     "Asia/Tokyo timezone",
 			t:        timestamp,
 			timezone: "Asia/Tokyo",
 			wantErr:  false,
-			contains: "2024-01-15T19:30:00+09:00", // UTC+9時間
+			contains: "2024-01-15T19:30:00+09:00", // UTC+9 hours
 		},
 		{
-			name:     "無効なタイムゾーン",
+			name:     "Invalid timezone",
 			t:        timestamp,
 			timezone: "Invalid/Timezone",
 			wantErr:  true,
@@ -86,11 +86,11 @@ func TestFormatTimestampWithTimezone(t *testing.T) {
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("FormatTimestampWithTimezone() はエラーを返すべきでしたが、nil を返しました")
+					t.Errorf("FormatTimestampWithTimezone() should have returned an error, but returned nil")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("FormatTimestampWithTimezone() エラー = %v, エラーを期待していませんでした", err)
+					t.Errorf("FormatTimestampWithTimezone() error = %v, did not expect error", err)
 					return
 				}
 
@@ -113,18 +113,18 @@ func TestGenerateTimestampMarkdown(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "UTC タイムゾーン",
+			name:     "UTC timezone",
 			t:        timestamp,
 			timezone: "UTC",
 			wantErr:  false,
-			want:     "*最終更新: 2024-01-15T10:30:00Z*",
+			want:     "*Last updated: 2024-01-15T10:30:00Z*",
 		},
 		{
-			name:     "タイムゾーンなし",
+			name:     "No timezone",
 			t:        timestamp,
 			timezone: "",
 			wantErr:  false,
-			want:     "*最終更新: 2024-01-15T10:30:00Z*",
+			want:     "*Last updated: 2024-01-15T10:30:00Z*",
 		},
 	}
 
@@ -134,11 +134,11 @@ func TestGenerateTimestampMarkdown(t *testing.T) {
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("GenerateTimestampMarkdown() はエラーを返すべきでしたが、nil を返しました")
+					t.Errorf("GenerateTimestampMarkdown() should have returned an error, but returned nil")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("GenerateTimestampMarkdown() エラー = %v, エラーを期待していませんでした", err)
+					t.Errorf("GenerateTimestampMarkdown() error = %v, did not expect error", err)
 					return
 				}
 
@@ -158,10 +158,10 @@ func TestAddUpdateTimestamp(t *testing.T) {
 
 	err := os.MkdirAll(testDir, 0755)
 	if err != nil {
-		t.Fatalf("テストディレクトリの作成に失敗しました: %v", err)
+		t.Fatalf("Failed to create test directory: %v", err)
 	}
 
-	// テスト用のREADMEファイルを作成
+	// Create test README file
 	testReadme := filepath.Join(testDir, "README.md")
 	initialContent := `# Test README
 
@@ -172,41 +172,41 @@ existing content
 
 	err = os.WriteFile(testReadme, []byte(initialContent), 0644)
 	if err != nil {
-		t.Fatalf("テストファイルの作成に失敗しました: %v", err)
+		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// タイムスタンプを追加
+	// Add timestamp
 	timestamp := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 	err = AddUpdateTimestamp(testReadme, "STATS", timestamp, "UTC")
 	if err != nil {
-		t.Fatalf("AddUpdateTimestamp() エラー = %v", err)
+		t.Fatalf("AddUpdateTimestamp() error = %v", err)
 	}
 
-	// ファイルを読み込んで確認
+	// Read file and verify
 	content, err := ReadFile(testReadme)
 	if err != nil {
-		t.Fatalf("ファイルの読み込みに失敗しました: %v", err)
+		t.Fatalf("Failed to read file: %v", err)
 	}
 
-	// タイムスタンプが含まれているか確認
-	if !strings.Contains(content, "*最終更新:") {
-		t.Errorf("AddUpdateTimestamp() タイムスタンプが追加されていません")
+	// Verify timestamp is included
+	if !strings.Contains(content, "*Last updated:") {
+		t.Errorf("AddUpdateTimestamp() timestamp was not added")
 	}
 
 	if !strings.Contains(content, "2024-01-15T10:30:00Z") {
-		t.Errorf("AddUpdateTimestamp() 期待されるタイムスタンプが含まれていません")
+		t.Errorf("AddUpdateTimestamp() expected timestamp not included")
 	}
 
-	// 既存のコンテンツが保持されているか確認
+	// Verify existing content is preserved
 	if !strings.Contains(content, "existing content") {
-		t.Errorf("AddUpdateTimestamp() 既存のコンテンツが保持されていません")
+		t.Errorf("AddUpdateTimestamp() existing content not preserved")
 	}
 }
 
 func TestGetCurrentTimestamp(t *testing.T) {
 	result := GetCurrentTimestamp()
 
-	// 現在時刻の近くであることを確認（5分以内）
+	// Verify it's close to current time (within 5 minutes)
 	now := time.Now().UTC()
 	diff := now.Sub(result)
 
@@ -215,6 +215,6 @@ func TestGetCurrentTimestamp(t *testing.T) {
 	}
 
 	if diff > 5*time.Minute {
-		t.Errorf("GetCurrentTimestamp() 返された時刻が現在時刻から遠すぎます: %v", diff)
+		t.Errorf("GetCurrentTimestamp() returned time is too far from current time: %v", diff)
 	}
 }

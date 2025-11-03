@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// 拡張子と言語のマッピング
+// Extension to language mapping
 var extToLang = map[string]string{
 	".go":         "Go",
 	".py":         "Python",
@@ -76,16 +76,16 @@ var extToLang = map[string]string{
 	".make":       "Makefile",
 }
 
-// DetectLanguageFromFilename ファイル名から言語を判定する
+// DetectLanguageFromFilename detects language from filename
 //
 // Preconditions:
-// - filename が有効なファイルパスであること
+// - filename is a valid file path
 //
 // Postconditions:
-// - 言語名を返す（判定できない場合は空文字列）
+// - Returns language name (empty string if cannot determine)
 //
 // Invariants:
-// - 拡張子とファイル名から言語を判定する
+// - Detects language from extension and filename
 func DetectLanguageFromFilename(filename string) string {
 	if filename == "" {
 		return ""
@@ -94,17 +94,17 @@ func DetectLanguageFromFilename(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	filenameLower := strings.ToLower(filepath.Base(filename))
 
-	// 拡張子から判定
+	// Detect from extension
 	if lang, ok := extToLang[ext]; ok {
 		return lang
 	}
 
-	// ファイル名から判定（Dockerfile, Makefile など）
+	// Detect from filename (Dockerfile, Makefile, etc.)
 	if lang, ok := extToLang[filenameLower]; ok {
 		return lang
 	}
 
-	// 特殊なファイル名パターン
+	// Special filename patterns
 	if strings.HasPrefix(filenameLower, "dockerfile") {
 		return "Dockerfile"
 	}

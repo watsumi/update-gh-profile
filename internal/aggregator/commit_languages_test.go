@@ -90,6 +90,20 @@ func TestAggregateCommitLanguages(t *testing.T) {
 			wantTop5:          []string{"Go", "Python", "JavaScript"},
 			wantNotContains:   []string{"HTML", "CSS"},
 		},
+		{
+			name: "When Makefile is excluded (case-insensitive)",
+			commitLanguages: map[string]map[string]int{
+				"sha1": {
+					"Go":       5,
+					"Python":   3,
+					"Makefile": 10,
+				},
+			},
+			excludedLanguages: []string{"MAKEFILE"},
+			wantCount:         2,
+			wantTop5:          []string{"Go", "Python"},
+			wantNotContains:   []string{"Makefile", "MAKEFILE", "makefile"},
+		},
 	}
 
 	for _, tt := range tests {

@@ -14,42 +14,42 @@ func TestSaveSVG(t *testing.T) {
 		wantError  bool
 	}{
 		{
-			name:       "正常系: 基本的な保存",
+			name:       "Normal case: basic save",
 			svgContent: `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"><text>Test</text></svg>`,
 			filepath:   "test_output.svg",
 			wantError:  false,
 		},
 		{
-			name:       "正常系: サブディレクトリへの保存",
+			name:       "Normal case: save to subdirectory",
 			svgContent: `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"><text>Test</text></svg>`,
 			filepath:   "test_output/subdir/test.svg",
 			wantError:  false,
 		},
 		{
-			name:       "エラー: 空のコンテンツ",
+			name:       "Error: empty content",
 			svgContent: "",
 			filepath:   "test_empty.svg",
 			wantError:  true,
 		},
 		{
-			name:       "エラー: 空のファイルパス",
+			name:       "Error: empty file path",
 			svgContent: `<?xml version="1.0" encoding="UTF-8"?><svg></svg>`,
 			filepath:   "",
 			wantError:  true,
 		},
 	}
 
-	// テスト用の一時ディレクトリを作成
+	// Create temporary directory for testing
 	testDir := "test_output"
 	defer func() {
-		// テスト後にクリーンアップ
+		// Cleanup after test
 		os.RemoveAll(testDir)
 		os.Remove("test_output.svg")
 	}()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// テスト用のファイルパスを準備
+			// Prepare file path for testing
 			var testPath string
 			if tt.filepath != "" {
 				if filepath.IsAbs(tt.filepath) {
@@ -63,18 +63,18 @@ func TestSaveSVG(t *testing.T) {
 
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("SaveSVG() はエラーを返すべきでしたが、nil を返しました")
+					t.Errorf("SaveSVG() should have returned an error, but returned nil")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("SaveSVG() エラー = %v, エラーを期待していませんでした", err)
+					t.Errorf("SaveSVG() error = %v, did not expect error", err)
 					return
 				}
 
-				// ファイルが実際に作成されたか確認
+				// Verify file was actually created
 				if testPath != "" {
 					if _, err := os.Stat(testPath); os.IsNotExist(err) {
-						t.Errorf("SaveSVG() ファイルが作成されませんでした: %s", testPath)
+						t.Errorf("SaveSVG() file was not created: %s", testPath)
 					}
 				}
 			}
@@ -95,7 +95,7 @@ func TestSaveMultipleSVGs(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name: "正常系: 複数のSVGを保存",
+			name: "Normal case: save multiple SVGs",
 			svgs: map[string]string{
 				"chart1":     `<?xml version="1.0" encoding="UTF-8"?><svg><text>Chart 1</text></svg>`,
 				"chart2":     `<?xml version="1.0" encoding="UTF-8"?><svg><text>Chart 2</text></svg>`,
@@ -105,7 +105,7 @@ func TestSaveMultipleSVGs(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:      "エラー: 空のマップ",
+			name:      "Error: empty map",
 			svgs:      map[string]string{},
 			outputDir: testDir,
 			wantError: true,
@@ -118,15 +118,15 @@ func TestSaveMultipleSVGs(t *testing.T) {
 
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("SaveMultipleSVGs() はエラーを返すべきでしたが、nil を返しました")
+					t.Errorf("SaveMultipleSVGs() should have returned an error, but returned nil")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("SaveMultipleSVGs() エラー = %v, エラーを期待していませんでした", err)
+					t.Errorf("SaveMultipleSVGs() error = %v, did not expect error", err)
 					return
 				}
 
-				// すべてのファイルが作成されたか確認
+				// Verify all files were created
 				for filename := range tt.svgs {
 					expectedExt := ".svg"
 					if filepath.Ext(filename) != "" {

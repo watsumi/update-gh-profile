@@ -7,7 +7,7 @@ import (
 )
 
 func TestAggregateSummaryStats(t *testing.T) {
-	// テスト用のリポジトリデータを作成
+	// Create repository data for testing
 	repos := []*github.Repository{
 		{
 			StargazersCount: github.Int(10),
@@ -34,7 +34,7 @@ func TestAggregateSummaryStats(t *testing.T) {
 		wantPRs      int
 	}{
 		{
-			name:         "正常系: 複数リポジトリ",
+			name:         "Normal case: multiple repositories",
 			repositories: repos,
 			totalCommits: 100,
 			totalPRs:     50,
@@ -44,7 +44,7 @@ func TestAggregateSummaryStats(t *testing.T) {
 			wantPRs:      50,
 		},
 		{
-			name:         "空のリポジトリリスト",
+			name:         "Empty repository list",
 			repositories: []*github.Repository{},
 			totalCommits: 0,
 			totalPRs:     0,
@@ -54,7 +54,7 @@ func TestAggregateSummaryStats(t *testing.T) {
 			wantPRs:      0,
 		},
 		{
-			name: "単一リポジトリ",
+			name: "Single repository",
 			repositories: []*github.Repository{
 				{
 					StargazersCount: github.Int(100),
@@ -69,7 +69,7 @@ func TestAggregateSummaryStats(t *testing.T) {
 			wantPRs:      200,
 		},
 		{
-			name: "フォークリポジトリが含まれている場合（除外される）",
+			name: "When fork repositories are included (excluded)",
 			repositories: []*github.Repository{
 				{
 					StargazersCount: github.Int(10),
@@ -77,7 +77,7 @@ func TestAggregateSummaryStats(t *testing.T) {
 				},
 				{
 					StargazersCount: github.Int(20),
-					Fork:            github.Bool(true), // フォーク
+					Fork:            github.Bool(true), // Fork
 				},
 				{
 					StargazersCount: github.Int(5),
@@ -86,8 +86,8 @@ func TestAggregateSummaryStats(t *testing.T) {
 			},
 			totalCommits: 50,
 			totalPRs:     25,
-			wantStars:    15, // 10 + 5 (フォークは除外)
-			wantRepos:    2,  // フォークは除外
+			wantStars:    15, // 10 + 5 (forks excluded)
+			wantRepos:    2,  // Forks excluded
 			wantCommits:  50,
 			wantPRs:      25,
 		},

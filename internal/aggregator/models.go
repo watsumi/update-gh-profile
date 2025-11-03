@@ -1,28 +1,28 @@
 package aggregator
 
-// LanguageStat 言語統計情報
+// LanguageStat language statistics
 type LanguageStat struct {
-	Language        string  // 言語名
-	Bytes           int     // 総バイト数
-	Percentage      float64 // 全体に占める割合（パーセンテージ）
-	RepositoryCount int     // 使用されているリポジトリ数
+	Language        string  // Language name
+	Bytes           int     // Total bytes
+	Percentage      float64 // Percentage of total
+	RepositoryCount int     // Number of repositories where used
 }
 
-// SummaryStats サマリー統計情報
+// SummaryStats summary statistics
 type SummaryStats struct {
-	TotalStars        int // 合計スター数
-	RepositoryCount   int // リポジトリ数
-	TotalCommits      int // 総コミット数
-	TotalPullRequests int // 総プルリクエスト数
+	TotalStars        int // Total stars
+	RepositoryCount   int // Repository count
+	TotalCommits      int // Total commits
+	TotalPullRequests int // Total pull requests
 }
 
-// AggregatedMetrics 集計されたメトリクス
+// AggregatedMetrics aggregated metrics
 type AggregatedMetrics struct {
-	Languages              []LanguageStat // ランキング済み言語スライス
-	TotalBytes             int            // 全言語の総バイト数
-	RepositoryCount        int            // 対象リポジトリ数
-	CommitHistory          map[string]int // 日付ごとのコミット数
-	CommitTimeDistribution map[int]int    // 時間帯ごとのコミット数
-	CommitLanguages        map[string]int // コミットごとの使用言語Top5
-	SummaryStats           SummaryStats   // サマリー統計
+	Languages              []LanguageStat // Ranked language slice
+	TotalBytes             int            // Total bytes for all languages
+	RepositoryCount        int            // Number of target repositories
+	CommitHistory          map[string]int // Commit count per date
+	CommitTimeDistribution map[int]int    // Commit count per time slot
+	CommitLanguages        map[string]int // Top 5 languages by commit
+	SummaryStats           SummaryStats   // Summary statistics
 }

@@ -7,72 +7,72 @@ import (
 	"strings"
 )
 
-// UpdateSection README.md の指定されたセクションを新しいコンテンツで置き換える
-// タグが存在しない場合は自動的に追加する
+// UpdateSection replaces the specified section in README.md with new content
+// Automatically appends tags if they don't exist
 //
 // Preconditions:
-// - readmePath が有効な README.md ファイルパスであること
-// - startTag と endTag が有効なコメントタグ文字列であること
-// - newContent が置き換えに使用する新しいコンテンツであること
+// - readmePath is a valid README.md file path
+// - startTag and endTag are valid comment tag strings
+// - newContent is the new content to use for replacement
 //
 // Postconditions:
-// - README.md の startTag と endTag の間が newContent で置き換えられる
-// - タグが存在しない場合はファイル末尾に追加される
-// - 既存のコンテンツ（タグ以外）は保持される
+// - Content between startTag and endTag in README.md is replaced with newContent
+// - Tags are appended to the end of the file if they don't exist
+// - Existing content (except tags) is preserved
 //
 // Invariants:
-// - ファイルが存在しない場合はエラーが返される
+// - Returns error if file doesn't exist
 func UpdateSection(readmePath, startTag, endTag, newContent string) error {
-	// README ファイルを読み込む
+	// Read README file
 	content, err := os.ReadFile(readmePath)
 	if err != nil {
-		return fmt.Errorf("README ファイルの読み込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to read README file: %w", err)
 	}
 
 	readmeContent := string(content)
 
-	// タグ間のコンテンツを置き換え
+	// Replace content between tags
 	updatedContent, err := ReplaceSectionOrAppend(readmeContent, startTag, endTag, newContent)
 	if err != nil {
-		return fmt.Errorf("セクションの置き換えに失敗しました: %w", err)
+		return fmt.Errorf("failed to replace section: %w", err)
 	}
 
-	// 更新されたコンテンツをファイルに書き込む
+	// Write updated content to file
 	err = os.WriteFile(readmePath, []byte(updatedContent), 0644)
 	if err != nil {
-		return fmt.Errorf("README ファイルの書き込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to write README file: %w", err)
 	}
 
 	return nil
 }
 
-// ReplaceSectionOrAppend テキスト内の指定されたセクション（startTag と endTag の間）を新しいコンテンツで置き換える
-// タグが存在しない場合はファイル末尾に自動追加する
+// ReplaceSectionOrAppend replaces the specified section (between startTag and endTag) in text with new content
+// Automatically appends to end of file if tags don't exist
 //
 // Preconditions:
-// - content が読み込まれたファイルのコンテンツであること
-// - startTag と endTag が有効なコメントタグ文字列であること
+// - content is the content of a loaded file
+// - startTag and endTag are valid comment tag strings
 //
 // Postconditions:
-// - startTag と endTag の間のコンテンツが newContent で置き換えられる
-// - タグが存在しない場合はファイル末尾に追加される
-// - タグ自体は保持される
+// - Content between startTag and endTag is replaced with newContent
+// - Tags are appended to the end of the file if they don't exist
+// - Tags themselves are preserved
 //
 // Invariants:
-// - 既存のコンテンツ（タグ以外）は保持される
+// - Existing content (except tags) is preserved
 func ReplaceSectionOrAppend(content, startTag, endTag, newContent string) (string, error) {
-	// startTag と endTag が存在するか確認
+	// Check if startTag and endTag exist
 	startIndex := strings.Index(content, startTag)
 	endIndex := strings.Index(content, endTag)
 
-	// タグが存在しない場合はファイル末尾に追加
+	// Append to end of file if tags don't exist
 	if startIndex == -1 || endIndex == -1 {
-		// ファイル末尾に改行がない場合は追加
+		// Add newline if end of file doesn't have one
 		result := content
 		if !strings.HasSuffix(result, "\n") && !strings.HasSuffix(result, "\n\n") {
 			result += "\n"
 		}
-		// タグとコンテンツを追加
+		// Add tags and content
 		result += "\n" + startTag + "\n"
 		if newContent != "" {
 			result += newContent + "\n"
@@ -81,70 +81,70 @@ func ReplaceSectionOrAppend(content, startTag, endTag, newContent string) (strin
 		return result, nil
 	}
 
-	// endTag の位置が startTag より前にある場合はエラー
+	// Error if endTag position is before startTag
 	if endIndex < startIndex {
-		return "", fmt.Errorf("終了タグが開始タグより前にあります")
+		return "", fmt.Errorf("end tag is before start tag")
 	}
 
-	// 既存の ReplaceSection のロジックを使用
+	// Use existing ReplaceSection logic
 	return ReplaceSection(content, startTag, endTag, newContent)
 }
 
-// ReplaceSection テキスト内の指定されたセクション（startTag と endTag の間）を新しいコンテンツで置き換える
+// ReplaceSection replaces the specified section (between startTag and endTag) in text with new content
 //
 // Preconditions:
-// - content が読み込まれたファイルのコンテンツであること
-// - startTag と endTag が有効なコメントタグ文字列であること
+// - content is the content of a loaded file
+// - startTag and endTag are valid comment tag strings
 //
 // Postconditions:
-// - startTag と endTag の間のコンテンツが newContent で置き換えられる
-// - タグ自体は保持される
+// - Content between startTag and endTag is replaced with newContent
+// - Tags themselves are preserved
 //
 // Invariants:
-// - タグが見つからない場合はエラーが返される
-// - 既存のコンテンツ（タグ以外）は保持される
+// - Returns error if tags are not found
+// - Existing content (except tags) is preserved
 func ReplaceSection(content, startTag, endTag, newContent string) (string, error) {
-	// startTag と endTag が存在するか確認
+	// Check if startTag and endTag exist
 	startIndex := strings.Index(content, startTag)
 	if startIndex == -1 {
-		return "", fmt.Errorf("開始タグが見つかりません: %s", startTag)
+		return "", fmt.Errorf("start tag not found: %s", startTag)
 	}
 
 	endIndex := strings.Index(content, endTag)
 	if endIndex == -1 {
-		return "", fmt.Errorf("終了タグが見つかりません: %s", endTag)
+		return "", fmt.Errorf("end tag not found: %s", endTag)
 	}
 
-	// endTag の位置が startTag より前にある場合はエラー
+	// Error if endTag position is before startTag
 	if endIndex < startIndex {
-		return "", fmt.Errorf("終了タグが開始タグより前にあります")
+		return "", fmt.Errorf("end tag is before start tag")
 	}
 
-	// startTag の終了位置を取得（タグの終端まで）
+	// Get end position of startTag (up to tag end)
 	startTagEnd := startIndex + len(startTag)
 
-	// endTag の開始位置（タグの開始位置）
+	// Start position of endTag (tag start position)
 
-	// 置き換え: [開始タグの終端] + [新しいコンテンツ] + [終了タグ]
+	// Replace: [end of start tag] + [new content] + [end tag]
 	before := content[:startTagEnd]
 	after := content[endIndex:]
 
-	// 改行の調整
+	// Adjust newlines
 	result := before
 
-	// 新しいコンテンツが空の場合でも改行を保持
+	// Preserve newlines even if new content is empty
 	if newContent == "" {
-		// タグの後に改行がない場合は追加
+		// Add newline if tag doesn't have one after it
 		if !strings.HasSuffix(before, "\n") {
 			result += "\n"
 		}
 	} else {
-		// タグの後に改行がない場合は追加
+		// Add newline if tag doesn't have one after it
 		if !strings.HasSuffix(before, "\n") {
 			result += "\n"
 		}
 		result += newContent
-		// endTag の前に改行が必要な場合は追加
+		// Add newline before endTag if needed
 		if !strings.HasPrefix(after, "\n") && !strings.HasSuffix(newContent, "\n") {
 			result += "\n"
 		}
@@ -155,134 +155,134 @@ func ReplaceSection(content, startTag, endTag, newContent string) (string, error
 	return result, nil
 }
 
-// FindSection 指定されたタグ間のコンテンツを抽出する
+// FindSection extracts content between specified tags
 //
 // Preconditions:
-// - content が読み込まれたファイルのコンテンツであること
-// - startTag と endTag が有効なコメントタグ文字列であること
+// - content is the content of a loaded file
+// - startTag and endTag are valid comment tag strings
 //
 // Postconditions:
-// - startTag と endTag の間のコンテンツが返される（タグ自体は含まない）
-// - タグが見つからない場合はエラーが返される
+// - Returns content between startTag and endTag (tags themselves not included)
+// - Returns error if tags are not found
 //
 // Invariants:
-// - タグの順序が正しいことが確認される
+// - Tag order is verified as correct
 func FindSection(content, startTag, endTag string) (string, error) {
 	startIndex := strings.Index(content, startTag)
 	if startIndex == -1 {
-		return "", fmt.Errorf("開始タグが見つかりません: %s", startTag)
+		return "", fmt.Errorf("start tag not found: %s", startTag)
 	}
 
 	endIndex := strings.Index(content, endTag)
 	if endIndex == -1 {
-		return "", fmt.Errorf("終了タグが見つかりません: %s", endTag)
+		return "", fmt.Errorf("end tag not found: %s", endTag)
 	}
 
 	if endIndex < startIndex {
-		return "", fmt.Errorf("終了タグが開始タグより前にあります")
+		return "", fmt.Errorf("end tag is before start tag")
 	}
 
-	// 開始タグの終了位置から終了タグの開始位置までを抽出
+	// Extract from end of start tag to start of end tag
 	startContentIndex := startIndex + len(startTag)
 	sectionContent := content[startContentIndex:endIndex]
 
-	// 前後の空白や改行をトリム
+	// Trim whitespace and newlines from front and back
 	sectionContent = strings.TrimSpace(sectionContent)
 
 	return sectionContent, nil
 }
 
-// ValidateTags README.md 内に指定されたタグが正しく存在するか検証する
+// ValidateTags validates that specified tags exist correctly in README.md
 //
 // Preconditions:
-// - readmePath が有効な README.md ファイルパスであること
-// - startTag と endTag が有効なコメントタグ文字列であること
+// - readmePath is a valid README.md file path
+// - startTag and endTag are valid comment tag strings
 //
 // Postconditions:
-// - タグが存在し、順序が正しい場合は nil が返される
-// - タグが見つからない、または順序が不正な場合はエラーが返される
+// - Returns nil if tags exist and order is correct
+// - Returns error if tags are not found or order is incorrect
 //
 // Invariants:
-// - ファイルが読み込めることが前提
+// - Assumes file can be read
 func ValidateTags(readmePath, startTag, endTag string) error {
 	content, err := os.ReadFile(readmePath)
 	if err != nil {
-		return fmt.Errorf("README ファイルの読み込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to read README file: %w", err)
 	}
 
 	readmeContent := string(content)
 
-	// タグの存在確認
+	// Check tag existence
 	startIndex := strings.Index(readmeContent, startTag)
 	if startIndex == -1 {
-		return fmt.Errorf("開始タグが見つかりません: %s", startTag)
+		return fmt.Errorf("start tag not found: %s", startTag)
 	}
 
 	endIndex := strings.Index(readmeContent, endTag)
 	if endIndex == -1 {
-		return fmt.Errorf("終了タグが見つかりません: %s", endTag)
+		return fmt.Errorf("end tag not found: %s", endTag)
 	}
 
-	// 順序の確認
+	// Verify order
 	if endIndex < startIndex {
-		return fmt.Errorf("終了タグが開始タグより前にあります")
+		return fmt.Errorf("end tag is before start tag")
 	}
 
 	return nil
 }
 
-// ReadFile README.md ファイルを読み込む
+// ReadFile reads README.md file
 //
 // Preconditions:
-// - filePath が有効なファイルパスであること
+// - filePath is a valid file path
 //
 // Postconditions:
-// - ファイルの内容が文字列として返される
-// - ファイルが存在しない場合はエラーが返される
+// - Returns file content as a string
+// - Returns error if file doesn't exist
 //
 // Invariants:
-// - ファイルは UTF-8 エンコーディングであることを前提とする
+// - Assumes file is UTF-8 encoded
 func ReadFile(filePath string) (string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("ファイルの読み込みに失敗しました: %w", err)
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
 	return string(content), nil
 }
 
-// NormalizeTags コメントタグを正規化する（大文字小文字を統一、空白を整理）
+// NormalizeTags normalizes comment tags (unifies case, trims whitespace)
 //
 // Preconditions:
-// - tag がコメントタグ文字列であること（例: "START_LANGUAGE_STATS"）
+// - tag is a comment tag string (e.g., "START_LANGUAGE_STATS")
 //
 // Postconditions:
-// - HTML コメント形式のタグが返される（例: "<!-- START_LANGUAGE_STATS -->"）
+// - Returns HTML comment format tags (e.g., "<!-- START_LANGUAGE_STATS -->")
 //
 // Invariants:
-// - 返されるタグは有効な HTML コメント形式である
+// - Returned tags are valid HTML comment format
 func NormalizeTags(tagName string) (startTag, endTag string) {
-	// 既に HTML コメント形式の場合
+	// If already in HTML comment format
 	if strings.HasPrefix(tagName, "<!--") {
-		// タグ名部分を抽出（"<!-- " と " -->" を削除）
+		// Extract tag name part (remove "<!-- " and " -->")
 		tagContent := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(tagName, "-->"), "<!--"))
 		if strings.HasPrefix(tagContent, "START") {
-			// START タグの場合、END タグを生成
+			// If START tag, generate END tag
 			endContent := strings.TrimSpace(strings.Replace(tagContent, "START", "END", 1))
 			return tagName, fmt.Sprintf("<!-- %s -->", endContent)
 		}
-		// その他の場合はそのまま使用
+		// Otherwise use as is
 		return tagName, fmt.Sprintf("<!-- END%s -->", strings.TrimPrefix(tagContent, "START"))
 	}
 
-	// タグ名から HTML コメント形式を生成（大文字に変換）
+	// Generate HTML comment format from tag name (convert to uppercase)
 	startTag = fmt.Sprintf("<!-- START_%s -->", strings.ToUpper(tagName))
 	endTag = fmt.Sprintf("<!-- END_%s -->", strings.ToUpper(tagName))
 
 	return startTag, endTag
 }
 
-// EscapeRegexSpecialChars 正規表現の特殊文字をエスケープする（内部使用）
+// EscapeRegexSpecialChars escapes regex special characters (internal use)
 func escapeRegexSpecialChars(s string) string {
 	re := regexp.MustCompile(`[.*+?^${}()|[\]\\]`)
 	return re.ReplaceAllStringFunc(s, func(matched string) string {

@@ -12,7 +12,7 @@ func TestRankLanguages(t *testing.T) {
 		wantFirst      string
 	}{
 		{
-			name: "正常系: 複数言語",
+			name: "Normal case: multiple languages",
 			languageTotals: map[string]int{
 				"Go":         1000,
 				"Python":     500,
@@ -22,12 +22,12 @@ func TestRankLanguages(t *testing.T) {
 			wantFirst: "Go",
 		},
 		{
-			name:           "空のmap",
+			name:           "Empty map",
 			languageTotals: map[string]int{},
 			wantCount:      0,
 		},
 		{
-			name: "単一言語",
+			name: "Single language",
 			languageTotals: map[string]int{
 				"Go": 1000,
 			},
@@ -48,7 +48,7 @@ func TestRankLanguages(t *testing.T) {
 				t.Errorf("RankLanguages() first = %s, want %s", ranked[0].Language, tt.wantFirst)
 			}
 
-			// パーセンテージの合計を確認（丸め誤差を考慮）
+			// Verify total percentage (accounting for rounding errors)
 			if len(ranked) > 0 {
 				totalPercentage := 0.0
 				for _, lang := range ranked {
@@ -59,7 +59,7 @@ func TestRankLanguages(t *testing.T) {
 				}
 			}
 
-			// ソート順序を確認（降順）
+			// Verify sort order (descending)
 			for i := 1; i < len(ranked); i++ {
 				if ranked[i-1].Bytes < ranked[i].Bytes {
 					t.Errorf("RankLanguages() not sorted correctly: %d < %d", ranked[i-1].Bytes, ranked[i].Bytes)
@@ -83,11 +83,11 @@ func TestFilterMinorLanguages(t *testing.T) {
 		threshold float64
 		wantCount int
 	}{
-		{"閾値なし（0%）", 0.0, 5},
-		{"閾値5%", 5.0, 4},
-		{"閾値10%", 10.0, 3},
-		{"閾値50%", 50.0, 1},
-		{"閾値100%", 100.0, 0},
+		{"No threshold (0%)", 0.0, 5},
+		{"Threshold 5%", 5.0, 4},
+		{"Threshold 10%", 10.0, 3},
+		{"Threshold 50%", 50.0, 1},
+		{"Threshold 100%", 100.0, 0},
 	}
 
 	for _, tt := range tests {
@@ -98,13 +98,13 @@ func TestFilterMinorLanguages(t *testing.T) {
 				t.Errorf("FilterMinorLanguages() count = %d, want %d", len(filtered), tt.wantCount)
 			}
 
-			// 順序が保持されていることを確認
+			// Verify that order is preserved
 			for i := 0; i < len(filtered); i++ {
 				found := false
 				for j, orig := range ranked {
 					if orig.Language == filtered[i].Language {
 						found = true
-						// 順序が変わっていないことを確認（元のインデックスをチェック）
+						// Verify that order hasn't changed (check original index)
 						if i != j {
 							t.Errorf("FilterMinorLanguages() order changed: expected %s at index %d, got at %d",
 								filtered[i].Language, j, i)
@@ -117,7 +117,7 @@ func TestFilterMinorLanguages(t *testing.T) {
 				}
 			}
 
-			// すべての要素が閾値以上であることを確認
+			// Verify that all elements are above threshold
 			for _, lang := range filtered {
 				if lang.Percentage < tt.threshold {
 					t.Errorf("FilterMinorLanguages() language %s has percentage %.2f%% < threshold %.2f%%",

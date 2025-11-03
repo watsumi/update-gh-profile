@@ -65,8 +65,8 @@ func Run(ctx context.Context, token string, config Config) error {
 	logger.Info("認証ユーザー: %s", username)
 
 	// 1-2. GraphQLを使用してデータを一括取得・集計
-	fmt.Println("\n📊 GraphQLを使用してリポジトリデータを一括取得・集計しています...")
-	logger.Info("GraphQLを使用してデータを取得します")
+	fmt.Println("\n📊 リポジトリデータを一括取得・集計しています...")
+	logger.Info("データを取得します")
 
 	languageTotals, commitHistories, timeDistributions, allCommitLanguages, totalCommits, totalPRs, repos, err := AggregateGraphQLData(
 		ctx, token, username, userID, config.ExcludeForks)
@@ -80,9 +80,9 @@ func Run(ctx context.Context, token string, config Config) error {
 		return fmt.Errorf("リポジトリデータが見つかりませんでした")
 	}
 
-	logger.Info("GraphQLデータの取得が完了しました: 言語数=%d, コミット履歴数=%d, 総コミット数=%d, 総PR数=%d",
+	logger.Info("データの取得が完了しました: 言語数=%d, コミット履歴数=%d, 総コミット数=%d, 総PR数=%d",
 		len(languageTotals), len(commitHistories), totalCommits, totalPRs)
-	fmt.Printf("✅ GraphQLでデータを取得しました（言語: %d種類, コミット履歴: %dリポジトリ）\n",
+	fmt.Printf("✅ データを取得しました（言語: %d種類, コミット履歴: %dリポジトリ）\n",
 		len(languageTotals), len(commitHistories))
 
 	// 3. データの集計とランキング生成
@@ -120,9 +120,21 @@ func Run(ctx context.Context, token string, config Config) error {
 	// 4. SVG グラフの生成
 	fmt.Println("\n🎨 SVG グラフを生成しています...")
 
-	svgOutputDir := config.SVGOutputDir
-	if svgOutputDir == "" {
-		svgOutputDir = "."
+	// SVG ファイルの出力先を決定（README.md と同じディレクトリにする）
+	var svgOutputDir string
+	if config.SVGOutputDir == "" || config.SVGOutputDir == "." {
+		// GitHub Actions環境では GITHUB_WORKSPACE を使用（README.md と同じパス）
+		if config.RepoPath == "" || config.RepoPath == "." {
+			if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
+				svgOutputDir = workspace
+			} else {
+				svgOutputDir = "."
+			}
+		} else {
+			svgOutputDir = config.RepoPath
+		}
+	} else {
+		svgOutputDir = config.SVGOutputDir
 	}
 
 	// 出力ディレクトリの作成
@@ -214,10 +226,19 @@ func Run(ctx context.Context, token string, config Config) error {
 	// 5. README.md の更新
 	fmt.Println("\n📝 README.md を更新しています...")
 
-	readmePath := filepath.Join(config.RepoPath, "README.md")
-	if config.RepoPath == "" {
-		readmePath = "README.md"
+	// README.md のパスを決定（RepoPath と Git 操作のパスを一致させる）
+	var readmeBasePath string
+	if config.RepoPath == "" || config.RepoPath == "." {
+		// GitHub Actions環境では GITHUB_WORKSPACE を使用
+		if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
+			readmeBasePath = workspace
+		} else {
+			readmeBasePath = "."
+		}
+	} else {
+		readmeBasePath = config.RepoPath
 	}
+	readmePath := filepath.Join(readmeBasePath, "README.md")
 
 	// README が存在しない場合は作成
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
@@ -239,8 +260,8 @@ func Run(ctx context.Context, token string, config Config) error {
 
 	for sectionTag, svgFile := range svgSections {
 		if svgPath, ok := svgs[svgFile]; ok {
-			// 相対パスに変換
-			relPath, err := filepath.Rel(config.RepoPath, svgPath)
+			// 相対パスに変換（README.md の基準パスを使用）
+			relPath, err := filepath.Rel(readmeBasePath, svgPath)
 			if err != nil {
 				relPath = svgFile
 			}
@@ -274,17 +295,35 @@ func Run(ctx context.Context, token string, config Config) error {
 	fmt.Println("\n🔀 Git 操作を実行しています...")
 
 	repoPath := config.RepoPath
-	if repoPath == "" {
-		// GitHub Actions環境では GITHUB_WORKSPACE を使用
+	// GitHub Actions環境では GITHUB_WORKSPACE を使用（RepoPath が空または "." の場合）
+	if repoPath == "" || repoPath == "." {
 		if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
 			repoPath = workspace
+			logger.Info("GITHUB_WORKSPACE を使用: %s", workspace)
 		} else {
-			repoPath = "."
+			if repoPath == "" {
+				repoPath = "."
+			}
+			logger.Info("GITHUB_WORKSPACE が設定されていないため、カレントディレクトリを使用: %s", repoPath)
 		}
+	}
+
+	// 絶対パスに変換してログ出力
+	absRepoPath, err := filepath.Abs(repoPath)
+	if err == nil {
+		logger.Info("リポジトリパス（絶対）: %s", absRepoPath)
 	}
 
 	// Git リポジトリか確認
 	if !git.IsGitRepository(repoPath) {
+		// デバッグ情報: .git ディレクトリの存在確認
+		absPath, _ := filepath.Abs(repoPath)
+		gitDir := filepath.Join(absPath, ".git")
+		if _, err := os.Stat(gitDir); err != nil {
+			logger.Warning(".git ディレクトリが見つかりません: %s (エラー: %v)", gitDir, err)
+		} else {
+			logger.Warning(".git ディレクトリは存在しますが、Git リポジトリとして認識されません: %s", gitDir)
+		}
 		logger.Warning("Git リポジトリではないため、コミット・プッシュをスキップします（パス: %s）", repoPath)
 		fmt.Printf("  ℹ️  Git リポジトリではないため、コミット・プッシュをスキップします（パス: %s）\n", repoPath)
 		return nil

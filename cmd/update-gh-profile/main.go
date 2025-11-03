@@ -58,8 +58,9 @@ func main() {
 	logLevel := logger.ParseLogLevel(logLevelStr)
 
 	// ワークフロー設定
+	// RepoPath は空文字列にすることで、GitHub Actions環境では GITHUB_WORKSPACE を自動的に使用
 	workflowConfig := workflow.Config{
-		RepoPath:        ".",                                    // カレントディレクトリ
+		RepoPath:        "",                                     // 空文字列 = GitHub Actions環境では GITHUB_WORKSPACE を使用
 		SVGOutputDir:    ".",                                    // SVG ファイルの出力先
 		Timezone:        "UTC",                                  // タイムゾーン
 		CommitMessage:   "chore: update GitHub profile metrics", // Git コミットメッセージ

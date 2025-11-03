@@ -14,98 +14,98 @@ import (
 )
 
 func main() {
-	// コマンドライン引数のパース
+	// Parse command line arguments
 	var (
-		excludeForksStr     = flag.String("exclude-forks", "true", "フォークリポジトリを除外するか（true/false）")
-		excludeLanguagesStr = flag.String("exclude-languages", "", "ランキングから除外する言語名（カンマ区切り、例: JSON,Markdown,Text）")
+		excludeForksStr     = flag.String("exclude-forks", "true", "Whether to exclude forked repositories (true/false)")
+		excludeLanguagesStr = flag.String("exclude-languages", "", "Language names to exclude from ranking (comma-separated, e.g., JSON,Markdown,Text)")
 	)
 	flag.Parse()
 
-	fmt.Println("update-gh-profile: GitHub プロフィール自動更新ツール")
-	fmt.Println("初期化完了")
+	fmt.Println("update-gh-profile: GitHub profile auto-update tool")
+	fmt.Println("Initialization complete")
 
-	// 設定を読み込む
+	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Printf("エラー: 設定の読み込みに失敗しました: %v\n", err)
+		fmt.Printf("Error: failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		fmt.Printf("エラー: 設定の検証に失敗しました: %v\n", err)
+		fmt.Printf("Error: failed to validate configuration: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ GitHub Token が設定されています")
+	fmt.Println("✓ GitHub Token is set")
 
-	// コンテキストの作成
+	// Create context
 	ctx := context.Background()
 
-	// 認証ユーザーはGraphQLで自動的に取得されます
+	// Authenticated user will be automatically fetched via GraphQL
 
-	// フォーク除外の設定
+	// Configure fork exclusion
 	excludeForks, err := strconv.ParseBool(*excludeForksStr)
 	if err != nil {
-		fmt.Printf("警告: exclude-forks の値が不正です（%s）。デフォルト値 true を使用します\n", *excludeForksStr)
+		fmt.Printf("Warning: invalid exclude-forks value (%s). Using default value true\n", *excludeForksStr)
 		excludeForks = true
 	}
 
-	// 除外言語の設定（環境変数またはコマンドライン引数から）
+	// Configure excluded languages (from environment variable or command line argument)
 	var excludedLanguages []string
 	if excludeLanguagesEnv := os.Getenv("EXCLUDE_LANGUAGES"); excludeLanguagesEnv != "" {
-		// 環境変数から読み込み
+		// Load from environment variable
 		excludedLanguages = parseLanguageList(excludeLanguagesEnv)
 	} else if *excludeLanguagesStr != "" {
-		// コマンドライン引数から読み込み
+		// Load from command line argument
 		excludedLanguages = parseLanguageList(*excludeLanguagesStr)
 	}
 
-	fmt.Println("\n✅ GitHub API クライアントの初期化に成功しました！")
+	fmt.Println("\n✅ GitHub API client initialization successful!")
 
-	// ログレベルの設定（環境変数から読み込み）
+	// Configure log level (load from environment variable)
 	logLevelStr := os.Getenv("LOG_LEVEL")
 	if logLevelStr == "" {
 		logLevelStr = "INFO"
 	}
 	logLevel := logger.ParseLogLevel(logLevelStr)
 
-	// ワークフロー設定
-	// RepoPath は空文字列にすることで、GitHub Actions環境では GITHUB_WORKSPACE を自動的に使用
+	// Workflow configuration
+	// Set RepoPath to empty string to automatically use GITHUB_WORKSPACE in GitHub Actions environment
 	workflowConfig := workflow.Config{
-		RepoPath:          "",                                     // 空文字列 = GitHub Actions環境では GITHUB_WORKSPACE を使用
-		SVGOutputDir:      ".",                                    // SVG ファイルの出力先
-		Timezone:          "UTC",                                  // タイムゾーン
-		CommitMessage:     "chore: update GitHub profile metrics", // Git コミットメッセージ
-		MaxRepositories:   0,                                      // 0 = すべてのリポジトリ
+		RepoPath:          "",                                     // Empty string = automatically use GITHUB_WORKSPACE in GitHub Actions environment
+		SVGOutputDir:      ".",                                    // Output directory for SVG files
+		Timezone:          "UTC",                                  // Timezone
+		CommitMessage:     "chore: update GitHub profile metrics", // Git commit message
+		MaxRepositories:   0,                                      // 0 = all repositories
 		ExcludeForks:      excludeForks,
-		ExcludedLanguages: excludedLanguages, // 除外する言語リスト
-		LogLevel:          logLevel,          // ログレベル
+		ExcludedLanguages: excludedLanguages, // List of languages to exclude
+		LogLevel:          logLevel,          // Log level
 	}
 
-	// ワークフローを実行
-	fmt.Println("\n🚀 メインワークフローを開始します...")
+	// Execute workflow
+	fmt.Println("\n🚀 Starting main workflow...")
 	err = workflow.Run(ctx, cfg.GitHubToken, workflowConfig)
 	if err != nil {
-		fmt.Printf("エラー: ワークフローの実行に失敗しました: %v\n", err)
+		fmt.Printf("Error: failed to execute workflow: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("\n✅ すべての処理が完了しました！")
+	fmt.Println("\n✅ All processing completed!")
 	os.Exit(0)
 }
 
-// parseLanguageList カンマ区切りの言語名文字列をスライスに変換する
+// parseLanguageList converts a comma-separated language name string to a slice
 func parseLanguageList(languagesStr string) []string {
 	if languagesStr == "" {
 		return []string{}
 	}
 
-	// カンマで分割
+	// Split by comma
 	parts := strings.Split(languagesStr, ",")
 	languages := make([]string, 0, len(parts))
 
 	for _, part := range parts {
-		// 空白を削除
+		// Trim whitespace
 		trimmed := strings.TrimSpace(part)
 		if trimmed != "" {
 			languages = append(languages, trimmed)

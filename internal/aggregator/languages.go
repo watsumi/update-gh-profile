@@ -9,47 +9,47 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// AggregateLanguages 全リポジトリの言語データを集計する
+// AggregateLanguages aggregates language data from all repositories
 //
 // Preconditions:
-// - repositories がリポジトリ構造体のスライスであること
-// - languageData が map[string]map[string]int{リポジトリ名: {言語: バイト数}} の形式であること
+// - repositories is a slice of repository structs
+// - languageData is in the format map[string]map[string]int{repository: {language: bytes}}
 //
 // Postconditions:
-// - 返される map は map[string]int{言語名: 総バイト数} の形式である
-// - フォークされたリポジトリのデータは除外されている（repositoriesで既に除外されている前提）
+// - Returns a map in the format map[string]int{language: totalBytes}
+// - Forked repository data is excluded (assumes repositories already filtered)
 //
 // Invariants:
-// - 同じ言語のデータは合算される
-// - フォークリポジトリは除外される
+// - Data for the same language is summed
+// - Forked repositories are excluded
 func AggregateLanguages(repositories []*github.Repository, languageData map[string]map[string]int) map[string]int {
-	log.Printf("言語データの集計を開始: %d リポジトリ", len(repositories))
+	log.Printf("Starting language data aggregation: %d repositories", len(repositories))
 
-	// 言語ごとの総バイト数を集計する map
+	// Map to aggregate total bytes per language
 	languageTotals := make(map[string]int)
-	// 言語ごとの使用リポジトリ数をカウントする map
+	// Map to count repositories using each language
 	languageRepoCounts := make(map[string]map[string]bool)
 
 	for _, repo := range repositories {
-		// フォークリポジトリはスキップ（repositoriesで既に除外されている前提だが、念のため）
+		// Skip forked repositories (assumes already filtered, but check just in case)
 		if repo.GetFork() {
 			continue
 		}
 
-		// リポジトリ名を生成（owner/repo形式）
+		// Generate repository name (owner/repo format)
 		repoKey := fmt.Sprintf("%s/%s", repo.GetOwner().GetLogin(), repo.GetName())
 
-		// このリポジトリの言語データを取得
+		// Get language data for this repository
 		langs, ok := languageData[repoKey]
 		if !ok {
-			continue // 言語データがない場合はスキップ
+			continue // Skip if no language data
 		}
 
-		// 各言語のバイト数を合算
+		// Sum bytes for each language
 		for lang, bytes := range langs {
 			languageTotals[lang] += bytes
 
-			// 言語ごとの使用リポジトリ数をカウント
+			// Count repositories using each language
 			if languageRepoCounts[lang] == nil {
 				languageRepoCounts[lang] = make(map[string]bool)
 			}
@@ -57,38 +57,38 @@ func AggregateLanguages(repositories []*github.Repository, languageData map[stri
 		}
 	}
 
-	log.Printf("言語データの集計完了: %d 言語", len(languageTotals))
+	log.Printf("Language data aggregation completed: %d languages", len(languageTotals))
 	return languageTotals
 }
 
-// RankLanguages 言語データをランキング化する
+// RankLanguages ranks language data
 //
 // Preconditions:
-// - languageTotals が map[string]int{言語名: 総バイト数} の形式であること
+// - languageTotals is in the format map[string]int{language: totalBytes}
 //
 // Postconditions:
-// - 返されるスライスは LanguageStat 構造体のスライスで、バイト数降順にソートされている
-// - 各 LanguageStat にはパーセンテージが含まれる
+// - Returns a slice of LanguageStat structs, sorted by bytes in descending order
+// - Each LanguageStat contains a percentage
 //
 // Invariants:
-// - パーセンテージの合計は 100% になる（丸め誤差を除く）
+// - Total percentage equals 100% (excluding rounding errors)
 func RankLanguages(languageTotals map[string]int) []LanguageStat {
 	if len(languageTotals) == 0 {
 		return []LanguageStat{}
 	}
 
-	// 総バイト数を計算
+	// Calculate total bytes
 	totalBytes := 0
 	for _, bytes := range languageTotals {
 		totalBytes += bytes
 	}
 
 	if totalBytes == 0 {
-		log.Printf("警告: 総バイト数が0です")
+		log.Printf("Warning: total bytes is 0")
 		return []LanguageStat{}
 	}
 
-	// LanguageStat スライスを作成
+	// Create LanguageStat slice
 	var ranked []LanguageStat
 	for lang, bytes := range languageTotals {
 		percentage := float64(bytes) / float64(totalBytes) * 100.0
@@ -99,29 +99,29 @@ func RankLanguages(languageTotals map[string]int) []LanguageStat {
 		})
 	}
 
-	// バイト数降順でソート
+	// Sort by bytes in descending order
 	sort.Slice(ranked, func(i, j int) bool {
 		return ranked[i].Bytes > ranked[j].Bytes
 	})
 
-	log.Printf("言語ランキング生成完了: %d 言語（総バイト数: %d）", len(ranked), totalBytes)
+	log.Printf("Language ranking generation completed: %d languages (total bytes: %d)", len(ranked), totalBytes)
 	return ranked
 }
 
-// FilterMinorLanguages 閾値以下の言語を除外する
+// FilterMinorLanguages excludes languages below the threshold
 //
 // Preconditions:
-// - rankedLanguages がランキング済み言語スライスであること
-// - threshold が 0 以上 100 以下であること
+// - rankedLanguages is a slice of ranked languages
+// - threshold is between 0 and 100
 //
 // Postconditions:
-// - 返されるスライスは閾値以上のパーセンテージを持つ言語のみを含む
+// - Returns a slice containing only languages with percentage above or equal to threshold
 //
 // Invariants:
-// - 元のスライスの順序が保持される
+// - Original slice order is preserved
 func FilterMinorLanguages(rankedLanguages []LanguageStat, threshold float64) []LanguageStat {
 	if threshold < 0 || threshold > 100 {
-		log.Printf("警告: 閾値が範囲外です（%f）。すべての言語を含みます", threshold)
+		log.Printf("Warning: threshold is out of range (%f). Including all languages", threshold)
 		return rankedLanguages
 	}
 
@@ -132,31 +132,31 @@ func FilterMinorLanguages(rankedLanguages []LanguageStat, threshold float64) []L
 		}
 	}
 
-	log.Printf("閾値（%.2f%%）によるフィルタリング完了: %d 言語 → %d 言語", threshold, len(rankedLanguages), len(filtered))
+	log.Printf("Filtering by threshold (%.2f%%) completed: %d languages → %d languages", threshold, len(rankedLanguages), len(filtered))
 	return filtered
 }
 
-// FilterExcludedLanguages 指定された言語を除外する
+// FilterExcludedLanguages excludes specified languages
 //
 // Preconditions:
-// - rankedLanguages がランキング済み言語スライスであること
-// - excludedLanguages が除外する言語名のスライスであること（空でも可）
+// - rankedLanguages is a slice of ranked languages
+// - excludedLanguages is a slice of language names to exclude (can be empty)
 //
 // Postconditions:
-// - 返されるスライスは除外リストに含まれていない言語のみを含む
+// - Returns a slice containing only languages not in the exclusion list
 //
 // Invariants:
-// - 元のスライスの順序が保持される
-// - 大文字小文字を区別せずに比較する
+// - Original slice order is preserved
+// - Case-insensitive comparison
 func FilterExcludedLanguages(rankedLanguages []LanguageStat, excludedLanguages []string) []LanguageStat {
 	if len(excludedLanguages) == 0 {
 		return rankedLanguages
 	}
 
-	// 除外リストを大文字小文字を区別しない比較のためにmapに変換
+	// Convert exclusion list to map for case-insensitive comparison
 	excludedMap := make(map[string]bool)
 	for _, lang := range excludedLanguages {
-		// 空白を削除し、大文字小文字を区別しない比較のために小文字に変換
+		// Trim whitespace and convert to lowercase for case-insensitive comparison
 		normalized := strings.TrimSpace(strings.ToLower(lang))
 		if normalized != "" {
 			excludedMap[normalized] = true
@@ -165,13 +165,13 @@ func FilterExcludedLanguages(rankedLanguages []LanguageStat, excludedLanguages [
 
 	var filtered []LanguageStat
 	for _, lang := range rankedLanguages {
-		// 言語名を正規化して比較
+		// Normalize language name for comparison
 		normalized := strings.ToLower(lang.Language)
 		if !excludedMap[normalized] {
 			filtered = append(filtered, lang)
 		}
 	}
 
-	log.Printf("除外言語によるフィルタリング完了: %d 言語 → %d 言語（除外: %v）", len(rankedLanguages), len(filtered), excludedLanguages)
+	log.Printf("Filtering by excluded languages completed: %d languages → %d languages (excluded: %v)", len(rankedLanguages), len(filtered), excludedLanguages)
 	return filtered
 }

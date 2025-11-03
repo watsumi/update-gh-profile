@@ -16,118 +16,119 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// Config ワークフロー設定
+// Config workflow configuration
 type Config struct {
-	RepoPath          string          // リポジトリパス（README.md がある場所）
-	SVGOutputDir      string          // SVG ファイルの出力ディレクトリ
-	Timezone          string          // タイムゾーン（例: "Asia/Tokyo", "UTC"）
-	CommitMessage     string          // Git コミットメッセージ
-	MaxRepositories   int             // 処理する最大リポジトリ数（0 = すべて）
-	ExcludeForks      bool            // フォークリポジトリを除外するか
-	ExcludedLanguages []string        // ランキングから除外する言語名のリスト
-	LogLevel          logger.LogLevel // ログレベル
+	RepoPath          string          // Repository path (location of README.md)
+	SVGOutputDir      string          // Output directory for SVG files
+	Timezone          string          // Timezone (e.g., "Asia/Tokyo", "UTC")
+	CommitMessage     string          // Git commit message
+	MaxRepositories   int             // Maximum number of repositories to process (0 = all)
+	ExcludeForks      bool            // Whether to exclude forked repositories
+	ExcludedLanguages []string        // List of language names to exclude from ranking
+	LogLevel          logger.LogLevel // Log level
 }
 
-// Run メイン処理フローを実行する
+// Run executes the main workflow
 //
 // Preconditions:
-// - ctx が有効な context.Context であること
-// - client が初期化された GitHub API クライアントであること
-// - config が有効な Config 構造体であること
+// - ctx is a valid context.Context
+// - client is an initialized GitHub API client
+// - config is a valid Config struct
 //
 // Postconditions:
-// - README.md が更新される
-// - SVG ファイルが生成・保存される
-// - 変更があれば Git コミット・プッシュされる
+// - README.md is updated
+// - SVG files are generated and saved
+// - Git commit and push are executed if there are changes
 //
 // Invariants:
-// - エラーが発生した場合は適切に処理される
+// - Errors are handled appropriately when they occur
 func Run(ctx context.Context, token string, config Config) error {
-	// ロガーの設定
+	// Configure logger
 	if config.LogLevel != 0 {
 		logger.DefaultLogger.SetLevel(config.LogLevel)
 	}
 
-	logger.Info("ワークフローを開始します")
+	logger.Info("Starting workflow")
 
-	// トークンの検証（既に渡されているが念のため確認）
+	// Validate token (already passed, but verify)
 	if token == "" {
-		logger.Error("GITHUB_TOKEN が設定されていません")
-		return fmt.Errorf("GITHUB_TOKEN が設定されていません")
+		logger.Error("GITHUB_TOKEN is not set")
+		return fmt.Errorf("GITHUB_TOKEN is not set")
 	}
 
-	// 認証ユーザー情報をGraphQLで取得（生成された型を使用）
+	// Fetch authenticated user information via GraphQL (using generated types)
 	username, userID, err := repository.FetchViewerGenerated(ctx, token)
 	if err != nil {
-		logger.LogError(err, "認証ユーザー情報の取得に失敗しました")
-		return fmt.Errorf("認証ユーザー情報の取得に失敗しました: %w", err)
+		logger.LogError(err, "Failed to fetch authenticated user information")
+		return fmt.Errorf("failed to fetch authenticated user information: %w", err)
 	}
-	logger.Info("認証ユーザー: %s", username)
+	logger.Info("Authenticated user: %s", username)
 
-	// 1-2. GraphQLを使用してデータを一括取得・集計
-	fmt.Println("\n📊 リポジトリデータを一括取得・集計しています...")
-	logger.Info("データを取得します")
+	// 1-2. Fetch and aggregate data using GraphQL
+	fmt.Println("\n📊 Fetching and aggregating repository data...")
+	logger.Info("Fetching data")
 
 	languageTotals, commitHistories, timeDistributions, allCommitLanguages, totalCommits, totalPRs, repos, err := AggregateGraphQLData(
 		ctx, token, username, userID, config.ExcludeForks)
 	if err != nil {
-		logger.LogError(err, "GraphQLデータの取得・集計に失敗しました")
-		return fmt.Errorf("GraphQLデータの取得・集計に失敗しました: %w", err)
+		logger.LogError(err, "Failed to fetch and aggregate GraphQL data")
+		return fmt.Errorf("failed to fetch and aggregate GraphQL data: %w", err)
 	}
 
 	if len(languageTotals) == 0 {
-		logger.Warning("リポジトリデータが見つかりませんでした")
-		return fmt.Errorf("リポジトリデータが見つかりませんでした")
+		logger.Warning("No repository data found")
+		return fmt.Errorf("no repository data found")
 	}
 
-	logger.Info("データの取得が完了しました: 言語数=%d, コミット履歴数=%d, 総コミット数=%d, 総PR数=%d",
+	logger.Info("Data fetch completed: languages=%d, commit histories=%d, total commits=%d, total PRs=%d",
 		len(languageTotals), len(commitHistories), totalCommits, totalPRs)
-	fmt.Printf("✅ データを取得しました（言語: %d種類, コミット履歴: %dリポジトリ）\n",
+	fmt.Printf("✅ Data fetched (languages: %d, commit histories: %d repositories)\n",
 		len(languageTotals), len(commitHistories))
 
-	// 3. データの集計とランキング生成
-	fmt.Println("\n📈 データを集計・ランキング生成中...")
+	// 3. Aggregate data and generate rankings
+	fmt.Println("\n📈 Aggregating data and generating rankings...")
 
-	// 言語ランキング
+	// Language ranking (all languages, excluding specified ones)
 	var rankedLanguages []aggregator.LanguageStat
 	if len(languageTotals) > 0 {
 		rankedLanguages = aggregator.RankLanguages(languageTotals)
-		rankedLanguages = aggregator.FilterMinorLanguages(rankedLanguages, 1.0) // 1%以上の言語のみ
-		// 除外言語のフィルタリング
+		// Filter excluded languages (before any percentage filtering)
+		// This ensures excluded languages are not included in the pie chart
 		if len(config.ExcludedLanguages) > 0 {
 			rankedLanguages = aggregator.FilterExcludedLanguages(rankedLanguages, config.ExcludedLanguages)
 		}
+		// Note: Removed FilterMinorLanguages to show all languages in pie chart
 	}
 
-	// コミット履歴の集計
-	logger.Info("コミット履歴を集計しています...")
+	// Aggregate commit history
+	logger.Info("Aggregating commit history...")
 	aggregatedHistoryMap := aggregator.AggregateCommitHistory(commitHistories)
 	aggregatedHistory := aggregator.SortCommitHistoryByDate(aggregatedHistoryMap)
-	logger.Info("コミット履歴の集計が完了しました: %d 日分", len(aggregatedHistory))
+	logger.Info("Commit history aggregation completed: %d days", len(aggregatedHistory))
 
-	// コミット時間帯の集計
-	logger.Info("コミット時間帯を集計しています...")
+	// Aggregate commit time distribution
+	logger.Info("Aggregating commit time distribution...")
 	aggregatedTimeDistMap := aggregator.AggregateCommitTimeDistribution(timeDistributions)
 	aggregatedTimeDist := aggregator.SortCommitTimeDistributionByHour(aggregatedTimeDistMap)
-	logger.Info("コミット時間帯の集計が完了しました: %d 時間帯", len(aggregatedTimeDist))
+	logger.Info("Commit time distribution aggregation completed: %d time slots", len(aggregatedTimeDist))
 
-	// コミットごとの言語Top5（除外言語を除く）
+	// Top 5 languages by commit (excluding excluded languages)
 	top5Languages := aggregator.AggregateCommitLanguages(allCommitLanguages, config.ExcludedLanguages)
 
-	// サマリー統計
+	// Summary statistics
 	var reposForSummary []*github.Repository
 	if len(repos) > 0 {
 		reposForSummary = repos
 	}
 	summaryStats := aggregator.AggregateSummaryStats(reposForSummary, totalCommits, totalPRs)
 
-	// 4. SVG グラフの生成
-	fmt.Println("\n🎨 SVG グラフを生成しています...")
+	// 4. Generate SVG charts
+	fmt.Println("\n🎨 Generating SVG charts...")
 
-	// SVG ファイルの出力先を決定（README.md と同じディレクトリにする）
+	// Determine SVG output directory (same directory as README.md)
 	var svgOutputDir string
 	if config.SVGOutputDir == "" || config.SVGOutputDir == "." {
-		// GitHub Actions環境では GITHUB_WORKSPACE を使用（README.md と同じパス）
+		// Use GITHUB_WORKSPACE in GitHub Actions environment (same path as README.md)
 		if config.RepoPath == "" || config.RepoPath == "." {
 			if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
 				svgOutputDir = workspace
@@ -141,33 +142,33 @@ func Run(ctx context.Context, token string, config Config) error {
 		svgOutputDir = config.SVGOutputDir
 	}
 
-	// 出力ディレクトリの作成
+	// Create output directory
 	err = os.MkdirAll(svgOutputDir, 0755)
 	if err != nil {
-		return fmt.Errorf("出力ディレクトリの作成に失敗しました: %w", err)
+		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	svgs := make(map[string]string)
 
-	// 言語ランキング SVG
+	// Language ranking SVG
 	if len(rankedLanguages) > 0 {
 		langSVG, err := generator.GenerateLanguageChart(rankedLanguages, 10)
 		if err == nil {
 			langPath := filepath.Join(svgOutputDir, "language_chart.svg")
 			err = generator.SaveSVG(langSVG, langPath)
 			if err != nil {
-				logger.LogError(err, "言語ランキング SVG の保存に失敗しました")
+				logger.LogError(err, "Failed to save language ranking SVG")
 			} else {
 				svgs["language_chart.svg"] = langPath
-				logger.Info("言語ランキング SVG を生成しました: %s", langPath)
-				fmt.Printf("  ✅ 言語ランキング SVG を生成: %s\n", langPath)
+				logger.Info("Generated language ranking SVG: %s", langPath)
+				fmt.Printf("  ✅ Generated language ranking SVG: %s\n", langPath)
 			}
 		}
 	}
 
-	// コミット推移 SVG
+	// Commit history SVG
 	if len(aggregatedHistory) > 0 {
-		// DateCommitPair スライスを map[string]int に変換
+		// Convert DateCommitPair slice to map[string]int
 		historyMap := make(map[string]int)
 		for _, pair := range aggregatedHistory {
 			historyMap[pair.Date] = pair.Count
@@ -178,14 +179,14 @@ func Run(ctx context.Context, token string, config Config) error {
 			err = generator.SaveSVG(historySVG, historyPath)
 			if err == nil {
 				svgs["commit_history_chart.svg"] = historyPath
-				fmt.Printf("  ✅ コミット推移 SVG を生成: %s\n", historyPath)
+				fmt.Printf("  ✅ Generated commit history SVG: %s\n", historyPath)
 			}
 		}
 	}
 
-	// コミット時間帯 SVG
+	// Commit time distribution SVG
 	if len(aggregatedTimeDist) > 0 {
-		// HourCommitPair スライスを map[int]int に変換
+		// Convert HourCommitPair slice to map[int]int
 		timeDistMap := make(map[int]int)
 		for _, pair := range aggregatedTimeDist {
 			timeDistMap[pair.Hour] = pair.Count
@@ -196,12 +197,12 @@ func Run(ctx context.Context, token string, config Config) error {
 			err = generator.SaveSVG(timeSVG, timePath)
 			if err == nil {
 				svgs["commit_time_chart.svg"] = timePath
-				fmt.Printf("  ✅ コミット時間帯 SVG を生成: %s\n", timePath)
+				fmt.Printf("  ✅ Generated commit time distribution SVG: %s\n", timePath)
 			}
 		}
 	}
 
-	// コミットごとの言語Top5 SVG
+	// Top 5 languages by commit SVG
 	if len(top5Languages) > 0 {
 		commitLangSVG, err := generator.GenerateCommitLanguagesChart(top5Languages)
 		if err == nil {
@@ -209,12 +210,12 @@ func Run(ctx context.Context, token string, config Config) error {
 			err = generator.SaveSVG(commitLangSVG, commitLangPath)
 			if err == nil {
 				svgs["commit_languages_chart.svg"] = commitLangPath
-				fmt.Printf("  ✅ コミット言語Top5 SVG を生成: %s\n", commitLangPath)
+				fmt.Printf("  ✅ Generated top 5 languages by commit SVG: %s\n", commitLangPath)
 			}
 		}
 	}
 
-	// サマリーカード SVG
+	// Summary card SVG
 	if summaryStats.RepositoryCount > 0 {
 		summarySVG, err := generator.GenerateSummaryCard(summaryStats)
 		if err == nil {
@@ -222,18 +223,18 @@ func Run(ctx context.Context, token string, config Config) error {
 			err = generator.SaveSVG(summarySVG, summaryPath)
 			if err == nil {
 				svgs["summary_card.svg"] = summaryPath
-				fmt.Printf("  ✅ サマリーカード SVG を生成: %s\n", summaryPath)
+				fmt.Printf("  ✅ Generated summary card SVG: %s\n", summaryPath)
 			}
 		}
 	}
 
-	// 5. README.md の更新
-	fmt.Println("\n📝 README.md を更新しています...")
+	// 5. Update README.md
+	fmt.Println("\n📝 Updating README.md...")
 
-	// README.md のパスを決定（RepoPath と Git 操作のパスを一致させる）
+	// Determine README.md path (align with RepoPath and Git operation path)
 	var readmeBasePath string
 	if config.RepoPath == "" || config.RepoPath == "." {
-		// GitHub Actions環境では GITHUB_WORKSPACE を使用
+		// Use GITHUB_WORKSPACE in GitHub Actions environment
 		if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
 			readmeBasePath = workspace
 		} else {
@@ -244,16 +245,16 @@ func Run(ctx context.Context, token string, config Config) error {
 	}
 	readmePath := filepath.Join(readmeBasePath, "README.md")
 
-	// README が存在しない場合は作成
+	// Create README if it doesn't exist
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
 		err = os.WriteFile(readmePath, []byte("# GitHub Profile\n\n"), 0644)
 		if err != nil {
-			return fmt.Errorf("README.md の作成に失敗しました: %w", err)
+			return fmt.Errorf("failed to create README.md: %w", err)
 		}
-		fmt.Printf("  ℹ️  README.md を作成しました\n")
+		fmt.Printf("  ℹ️  Created README.md\n")
 	}
 
-	// SVG グラフを埋め込み
+	// Embed SVG charts
 	svgSections := map[string]string{
 		"LANGUAGE_STATS":   "language_chart.svg",
 		"COMMIT_HISTORY":   "commit_history_chart.svg",
@@ -264,7 +265,7 @@ func Run(ctx context.Context, token string, config Config) error {
 
 	for sectionTag, svgFile := range svgSections {
 		if svgPath, ok := svgs[svgFile]; ok {
-			// 相対パスに変換（README.md の基準パスを使用）
+			// Convert to relative path (using README.md base path)
 			relPath, err := filepath.Rel(readmeBasePath, svgPath)
 			if err != nil {
 				relPath = svgFile
@@ -272,86 +273,86 @@ func Run(ctx context.Context, token string, config Config) error {
 
 			err = readme.EmbedSVGWithCustomPath(readmePath, relPath, sectionTag, "")
 			if err != nil {
-				logger.LogErrorWithContext(err, sectionTag, "セクションの更新に失敗しました")
-				fmt.Printf("  ⚠️  セクション %s の更新に失敗: %v\n", sectionTag, err)
+				logger.LogErrorWithContext(err, sectionTag, "Failed to update section")
+				fmt.Printf("  ⚠️  Failed to update section %s: %v\n", sectionTag, err)
 			} else {
-				logger.Info("セクション %s を更新しました", sectionTag)
-				fmt.Printf("  ✅ セクション %s を更新\n", sectionTag)
+				logger.Info("Updated section %s", sectionTag)
+				fmt.Printf("  ✅ Updated section %s\n", sectionTag)
 			}
 		}
 	}
 
-	// 6. Git コミット・プッシュ
-	fmt.Println("\n🔀 Git 操作を実行しています...")
+	// 6. Git commit and push
+	fmt.Println("\n🔀 Executing Git operations...")
 
 	repoPath := config.RepoPath
-	// GitHub Actions環境では GITHUB_WORKSPACE を使用（RepoPath が空または "." の場合）
+	// Use GITHUB_WORKSPACE in GitHub Actions environment (when RepoPath is empty or ".")
 	if repoPath == "" || repoPath == "." {
 		if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
 			repoPath = workspace
-			logger.Info("GITHUB_WORKSPACE を使用: %s", workspace)
+			logger.Info("Using GITHUB_WORKSPACE: %s", workspace)
 		} else {
 			if repoPath == "" {
 				repoPath = "."
 			}
-			logger.Info("GITHUB_WORKSPACE が設定されていないため、カレントディレクトリを使用: %s", repoPath)
+			logger.Info("GITHUB_WORKSPACE not set, using current directory: %s", repoPath)
 		}
 	}
 
-	// 絶対パスに変換してログ出力
+	// Convert to absolute path for logging
 	absRepoPath, err := filepath.Abs(repoPath)
 	if err == nil {
-		logger.Info("リポジトリパス（絶対）: %s", absRepoPath)
+		logger.Info("Repository path (absolute): %s", absRepoPath)
 	}
 
-	// Git リポジトリか確認
+	// Check if it's a Git repository
 	if !git.IsGitRepository(repoPath) {
-		// デバッグ情報: .git ディレクトリの存在確認
+		// Debug info: check for .git directory
 		absPath, _ := filepath.Abs(repoPath)
 		gitDir := filepath.Join(absPath, ".git")
 		if _, err := os.Stat(gitDir); err != nil {
-			logger.Warning(".git ディレクトリが見つかりません: %s (エラー: %v)", gitDir, err)
+			logger.Warning(".git directory not found: %s (error: %v)", gitDir, err)
 		} else {
-			logger.Warning(".git ディレクトリは存在しますが、Git リポジトリとして認識されません: %s", gitDir)
+			logger.Warning(".git directory exists but not recognized as Git repository: %s", gitDir)
 		}
-		logger.Warning("Git リポジトリではないため、コミット・プッシュをスキップします（パス: %s）", repoPath)
-		fmt.Printf("  ℹ️  Git リポジトリではないため、コミット・プッシュをスキップします（パス: %s）\n", repoPath)
+		logger.Warning("Not a Git repository, skipping commit and push (path: %s)", repoPath)
+		fmt.Printf("  ℹ️  Not a Git repository, skipping commit and push (path: %s)\n", repoPath)
 		return nil
 	}
 
-	// 変更があるか確認
+	// Check for changes
 	hasChanges, err := git.HasChanges(repoPath)
 	if err != nil {
-		logger.LogError(err, "変更の確認に失敗しました")
-		return fmt.Errorf("変更の確認に失敗しました: %w", err)
+		logger.LogError(err, "Failed to check for changes")
+		return fmt.Errorf("failed to check for changes: %w", err)
 	}
 
 	if !hasChanges {
-		logger.Info("変更がないため、コミット・プッシュをスキップします")
-		fmt.Println("  ℹ️  変更がないため、コミット・プッシュをスキップします")
+		logger.Info("No changes, skipping commit and push")
+		fmt.Println("  ℹ️  No changes, skipping commit and push")
 		return nil
 	}
 
-	// コミットメッセージ
+	// Commit message
 	commitMsg := config.CommitMessage
 	if commitMsg == "" {
 		commitMsg = "chore: update GitHub profile metrics"
 	}
 
-	// コミット・プッシュ
-	// GitHub Actions 環境では認証情報が自動的に設定されるため、トークンは不要（空文字列を渡す）
-	logger.Info("Git コミット・プッシュを実行しています...")
+	// Commit and push
+	// In GitHub Actions environment, credentials are automatically configured, so token is not needed (pass empty string)
+	logger.Info("Executing Git commit and push...")
 	err = git.CommitAndPush(repoPath, commitMsg, nil, "origin", "", "")
 	if err != nil {
-		logger.LogError(err, "Git コミット・プッシュに失敗しました")
-		return fmt.Errorf("Git コミット・プッシュに失敗しました: %w", err)
+		logger.LogError(err, "Failed to commit and push")
+		return fmt.Errorf("failed to commit and push: %w", err)
 	}
 
-	logger.Info("Git コミット・プッシュが完了しました")
-	fmt.Println("  ✅ Git コミット・プッシュが完了しました")
+	logger.Info("Git commit and push completed")
+	fmt.Println("  ✅ Git commit and push completed")
 
-	logger.Info("すべての処理が完了しました")
-	fmt.Println("\n✅ すべての処理が完了しました！")
+	logger.Info("All processing completed")
+	fmt.Println("\n✅ All processing completed!")
 
 	return nil
 }

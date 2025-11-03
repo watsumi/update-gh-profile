@@ -74,9 +74,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           exclude_forks: "true"
           exclude_languages: "HTML,CSS,JSON" # 除外する言語名（カンマ区切り）
-        # 注意: このアクションは内部で自動的にコミットとプッシュを実行します
-        # permissions: contents: write により認証情報が自動的に設定されるため、
-        # github_token_write は不要です
 ```
 
 **注意事項:**

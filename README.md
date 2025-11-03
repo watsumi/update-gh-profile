@@ -76,9 +76,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           exclude_forks: "true"
           exclude_languages: "HTML,CSS,JSON" # Languages to exclude (comma-separated)
-        # Note: This action automatically commits and pushes internally
-        # Authentication is automatically configured via permissions: contents: write,
-        # so github_token_write is not needed
 ```
 
 **Notes:**

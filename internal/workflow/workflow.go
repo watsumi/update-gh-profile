@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/watsumi/update-gh-profile/internal/aggregator"
 	"github.com/watsumi/update-gh-profile/internal/generator"
@@ -275,20 +274,6 @@ func Run(ctx context.Context, token string, config Config) error {
 				fmt.Printf("  ✅ セクション %s を更新\n", sectionTag)
 			}
 		}
-	}
-
-	// 更新日時の追加
-	if config.Timezone == "" {
-		config.Timezone = "UTC"
-	}
-	timestamp := time.Now().UTC()
-	err = readme.AddUpdateTimestamp(readmePath, "UPDATE_TIMESTAMP", timestamp, config.Timezone)
-	if err != nil {
-		logger.LogError(err, "更新日時の追加に失敗しました")
-		fmt.Printf("  ⚠️  更新日時の追加に失敗: %v\n", err)
-	} else {
-		logger.Info("更新日時を追加しました")
-		fmt.Printf("  ✅ 更新日時を追加\n")
 	}
 
 	// 6. Git コミット・プッシュ

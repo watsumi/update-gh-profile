@@ -61,15 +61,15 @@ func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 	// ヘッダー
 	svg.WriteString(fmt.Sprintf(SVGHeader, width, height, width, height))
 
-	// スタイル定義（より豊かなグラデーション）
+	// スタイル定義（棒グラフ用のグラデーション）
 	svg.WriteString(`  <defs>
-    <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:0.4" />
-      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:0.2" />
-      <stop offset="100%" style="stop-color:#58a6ff;stop-opacity:0" />
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#58a6ff;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#1f6feb;stop-opacity:0.8" />
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+    <filter id="barGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
       <feMerge>
         <feMergeNode in="coloredBlur"/>
         <feMergeNode in="SourceGraphic"/>
@@ -104,62 +104,42 @@ func GenerateCommitHistoryChart(commitHistory map[string]int) (string, error) {
 `, padding-10, y+4, DefaultTextColor, value))
 	}
 
-	// データポイントの位置を計算
-	type Point struct {
-		X     float64
-		Y     float64
-		Date  string
-		Count int
-	}
-	points := make([]Point, len(sortedPairs))
-	xStep := float64(chartWidth) / float64(len(sortedPairs)-1)
+	// 棒グラフの配置を計算
+	barSpacing := float64(chartWidth) / float64(len(sortedPairs))
+	barWidth := barSpacing * 0.6 // 棒の幅（60%にして間隔を確保）
 
+	// 各データポイントを棒グラフとして描画
 	for i, pair := range sortedPairs {
-		x := float64(padding) + float64(i)*xStep
+		// 棒の中心位置を計算
+		barCenterX := float64(padding) + float64(i)*barSpacing + barSpacing/2
+		barX := barCenterX - barWidth/2
+
 		// Y座標は下から上（コミット数が多いほど上）
 		yRatio := float64(pair.Count) / float64(maxValue)
-		y := float64(padding+chartHeight) - (float64(chartHeight) * yRatio)
+		barY := float64(padding+chartHeight) - (float64(chartHeight) * yRatio)
+		barHeight := float64(padding+chartHeight) - barY
 
+		// 棒のグラデーション（グラデーション効果）
+		svg.WriteString(fmt.Sprintf(`  <rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="url(#barGrad)" rx="4" filter="url(#barGlow)" opacity="0.9"/>
+`, barX, barY, barWidth, barHeight))
+
+		// 棒のハイライト（上部に明るい線を追加）
+		svg.WriteString(fmt.Sprintf(`  <rect x="%.1f" y="%.1f" width="%.1f" height="3" fill="#79c0ff" rx="1" opacity="0.6"/>
+`, barX, barY, barWidth))
+	}
+
+	// X軸の日付ラベルのためにポイント情報を保持
+	type Point struct {
+		X    float64
+		Date string
+	}
+	points := make([]Point, len(sortedPairs))
+	for i, pair := range sortedPairs {
+		barCenterX := float64(padding) + float64(i)*barSpacing + barSpacing/2
 		points[i] = Point{
-			X:     x,
-			Y:     y,
-			Date:  pair.Date,
-			Count: pair.Count,
+			X:    barCenterX,
+			Date: pair.Date,
 		}
-	}
-
-	// エリアグラフのパス（グラデーション塗りつぶし）
-	var areaPath strings.Builder
-	areaPath.WriteString(fmt.Sprintf("M %d %d ", padding, padding+chartHeight))
-	for i, p := range points {
-		if i == 0 {
-			areaPath.WriteString(fmt.Sprintf("L %.1f %.1f ", p.X, p.Y))
-		} else {
-			areaPath.WriteString(fmt.Sprintf("L %.1f %.1f ", p.X, p.Y))
-		}
-	}
-	areaPath.WriteString(fmt.Sprintf("L %d %d Z", width-padding, padding+chartHeight))
-
-	svg.WriteString(fmt.Sprintf(`  <path d="%s" fill="url(#areaGrad)" opacity="0.6"/>
-`, areaPath.String()))
-
-	// 折れ線グラフのパス（太め + グロー効果）
-	var linePath strings.Builder
-	for i, p := range points {
-		if i == 0 {
-			linePath.WriteString(fmt.Sprintf("M %.1f %.1f ", p.X, p.Y))
-		} else {
-			linePath.WriteString(fmt.Sprintf("L %.1f %.1f ", p.X, p.Y))
-		}
-	}
-
-	svg.WriteString(fmt.Sprintf(`  <path d="%s" fill="none" stroke="#58a6ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
-`, linePath.String()))
-
-	// データポイント（円、大きめ + グロー効果）
-	for _, p := range points {
-		svg.WriteString(fmt.Sprintf(`  <circle cx="%.1f" cy="%.1f" r="4" fill="#58a6ff" stroke="%s" stroke-width="2" filter="url(#glow)"/>
-`, p.X, p.Y, DefaultBackgroundColor))
 	}
 
 	// X軸の日付ラベル（一定間隔で表示）

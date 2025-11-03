@@ -83,9 +83,14 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 	yPos := titleHeight + 10
 	maxPercentage := rankedLanguages[0].Percentage // 最大パーセンテージ（バーの幅を計算するため）
 
+	// バーグラフのレイアウト設定（右側に余白を確保）
+	barX := 140
+	rightMargin := 80 // 右側の余白（パーセンテージテキストのスペース）
+	maxBarWidth := width - barX - rightMargin
+
 	for i := 0; i < displayCount; i++ {
 		lang := rankedLanguages[i]
-		barWidth := int(float64(width-80) * lang.Percentage / maxPercentage)
+		barWidth := int(float64(maxBarWidth) * lang.Percentage / maxPercentage)
 
 		// ランキング番号
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="14" fill="%s" font-weight="600">%d.</text>
@@ -96,13 +101,12 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 `, 40, yPos, DefaultTextColor, escapeXML(lang.Language)))
 
 		// バーグラフ
-		barX := 140
 		barY := yPos - 12
 		barHeight := 18
 
 		// バーの背景（グロー効果付き）
 		svg.WriteString(fmt.Sprintf(`  <rect x="%d" y="%d" width="%d" height="%d" fill="#161b22" rx="6" stroke="#30363d" stroke-width="1"/>
-`, barX, barY, width-150, barHeight))
+`, barX, barY, maxBarWidth, barHeight))
 
 		// バー（グラデーション + グロー効果）
 		if barWidth > 0 {
@@ -110,9 +114,9 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 `, barX, barY, barWidth, barHeight))
 		}
 
-		// パーセンテージ（バーの右側）
+		// パーセンテージ（バーの右側、余白を考慮）
 		percentageText := fmt.Sprintf("%.1f%%", lang.Percentage)
-		textX := barX + (width - 150) + 10
+		textX := barX + maxBarWidth + 8
 		svg.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="12" fill="%s">%s</text>
 `, textX, yPos, DefaultTextColor, percentageText))
 

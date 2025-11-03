@@ -9,23 +9,23 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// TestFetchUserRepositories_InvalidUsername は、無効なユーザー名でエラーが返されることを確認する
+// TestFetchUserRepositories_InvalidUsername verifies that an error is returned for an invalid username
 func TestFetchUserRepositories_InvalidUsername(t *testing.T) {
 	ctx := context.Background()
-	client := github.NewClient(nil) // ダミーのクライアント
+	client := github.NewClient(nil) // Dummy client
 
-	// 無効なユーザー名（空文字列）で呼び出し
+	// Call with invalid username (empty string)
 	_, err := FetchUserRepositories(ctx, client, "", true, true)
 	if err == nil {
 		t.Errorf("Expected error for empty username, but got nil")
 	}
-	expectedError := "username が空です"
+	expectedError := "username is empty"
 	if err.Error() != expectedError {
 		t.Errorf("Expected error message '%s', but got '%s'", expectedError, err.Error())
 	}
 }
 
-// TestHandleRateLimit_NoRateLimit は、レート制限がない場合の処理を確認する
+// TestHandleRateLimit_NoRateLimit verifies handling when there is no rate limit
 func TestHandleRateLimit_NoRateLimit(t *testing.T) {
 	ctx := context.Background()
 	resp := &github.Response{
@@ -45,7 +45,7 @@ func TestHandleRateLimit_NoRateLimit(t *testing.T) {
 	}
 }
 
-// TestValidateOwnerAndRepo は、owner と repo の検証を確認する
+// TestValidateOwnerAndRepo verifies validation of owner and repo
 func TestValidateOwnerAndRepo(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -69,7 +69,7 @@ func TestValidateOwnerAndRepo(t *testing.T) {
 	}
 }
 
-// TestValidateUsername は、username の検証を確認する
+// TestValidateUsername verifies validation of username
 func TestValidateUsername(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -90,7 +90,7 @@ func TestValidateUsername(t *testing.T) {
 	}
 }
 
-// TestDetectLanguageFromFilename は、ファイル名から言語を判定する機能を確認する
+// TestDetectLanguageFromFilename verifies language detection from filename
 func TestDetectLanguageFromFilename(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -118,7 +118,7 @@ func TestDetectLanguageFromFilename(t *testing.T) {
 	}
 }
 
-// TestCheckPagination は、ページネーション判定を確認する
+// TestCheckPagination verifies pagination determination
 func TestCheckPagination(t *testing.T) {
 	tests := []struct {
 		name         string

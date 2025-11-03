@@ -336,9 +336,21 @@ func CommitAndPush(repoPath, message string, files []string, remote, branch, tok
 // - Git リポジトリの場合は true、そうでない場合は false が返される
 //
 // Invariants:
-// - .git ディレクトリの存在を確認する（シンボリックリンクも含む）
+// - git rev-parse コマンドを使用して確認（より確実）
+// - フォールバックとして .git ディレクトリ/ファイルの存在も確認
 func IsGitRepository(repoPath string) bool {
-	// 絶対パスに変換
+	// まず git rev-parse コマンドで確認（より確実な方法）
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	cmd.Dir = repoPath
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		// git rev-parse が成功した場合は Git リポジトリ
+		return true
+	}
+
+	// git rev-parse が失敗した場合、フォールバックとして .git の存在を確認
 	absPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		return false
@@ -350,8 +362,9 @@ func IsGitRepository(repoPath string) bool {
 		return false
 	}
 
-	// ディレクトリまたはシンボリックリンクの場合は Git リポジトリとみなす
-	return info.IsDir() || (info.Mode()&os.ModeSymlink != 0)
+	// ディレクトリ、ファイル、またはシンボリックリンクの場合は Git リポジトリとみなす
+	// (shallow clone の場合は .git がファイルになることがある)
+	return info.IsDir() || (info.Mode()&os.ModeSymlink != 0) || (info.Mode().IsRegular())
 }
 
 // GetCurrentBranch 現在のブランチ名を取得する

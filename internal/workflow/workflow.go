@@ -280,8 +280,8 @@ func Run(ctx context.Context, token string, config Config) error {
 
 	// Git リポジトリか確認
 	if !git.IsGitRepository(repoPath) {
-		logger.Warning("Git リポジトリではないため、コミット・プッシュをスキップします")
-		fmt.Println("  ℹ️  Git リポジトリではないため、コミット・プッシュをスキップします")
+		logger.Warning("Git リポジトリではないため、コミット・プッシュをスキップします（パス: %s）", repoPath)
+		fmt.Printf("  ℹ️  Git リポジトリではないため、コミット・プッシュをスキップします（パス: %s）\n", repoPath)
 		return nil
 	}
 

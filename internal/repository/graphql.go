@@ -113,7 +113,6 @@ query CommitLanguages($login: String!) {
           }
           primaryLanguage {
             name
-            color
           }
           defaultBranchRef {
             target {

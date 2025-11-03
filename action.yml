@@ -8,6 +8,10 @@ inputs:
     description: 'フォークリポジトリを除外するかどうか（true/false）'
     required: false
     default: 'true'
+  exclude_languages:
+    description: 'ランキングから除外する言語名（カンマ区切り、例: JSON,Markdown,Text）'
+    required: false
+    default: ''
 runs:
   using: 'composite'
   steps:
@@ -25,6 +29,7 @@ runs:
     - name: Fetch user repositories
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        EXCLUDE_LANGUAGES: ${{ inputs.exclude_languages }}
       shell: bash
       working-directory: ${{ github.action_path }}
       run: |
@@ -34,6 +39,11 @@ runs:
         EXCLUDE_FORKS="${{ inputs.exclude_forks }}"
         if [ -z "$EXCLUDE_FORKS" ]; then
           EXCLUDE_FORKS="true"
+        fi
+
+        # 除外言語を環境変数として設定（空の場合は設定しない）
+        if [ -n "${{ inputs.exclude_languages }}" ]; then
+          export EXCLUDE_LANGUAGES="${{ inputs.exclude_languages }}"
         fi
 
         # リポジトリ一覧を取得（認証ユーザー自身のリポジトリのみ）

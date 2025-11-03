@@ -18,13 +18,14 @@ import (
 
 // Config ワークフロー設定
 type Config struct {
-	RepoPath        string          // リポジトリパス（README.md がある場所）
-	SVGOutputDir    string          // SVG ファイルの出力ディレクトリ
-	Timezone        string          // タイムゾーン（例: "Asia/Tokyo", "UTC"）
-	CommitMessage   string          // Git コミットメッセージ
-	MaxRepositories int             // 処理する最大リポジトリ数（0 = すべて）
-	ExcludeForks    bool            // フォークリポジトリを除外するか
-	LogLevel        logger.LogLevel // ログレベル
+	RepoPath          string          // リポジトリパス（README.md がある場所）
+	SVGOutputDir      string          // SVG ファイルの出力ディレクトリ
+	Timezone          string          // タイムゾーン（例: "Asia/Tokyo", "UTC"）
+	CommitMessage     string          // Git コミットメッセージ
+	MaxRepositories   int             // 処理する最大リポジトリ数（0 = すべて）
+	ExcludeForks      bool            // フォークリポジトリを除外するか
+	ExcludedLanguages []string        // ランキングから除外する言語名のリスト
+	LogLevel          logger.LogLevel // ログレベル
 }
 
 // Run メイン処理フローを実行する
@@ -92,6 +93,10 @@ func Run(ctx context.Context, token string, config Config) error {
 	if len(languageTotals) > 0 {
 		rankedLanguages = aggregator.RankLanguages(languageTotals)
 		rankedLanguages = aggregator.FilterMinorLanguages(rankedLanguages, 1.0) // 1%以上の言語のみ
+		// 除外言語のフィルタリング
+		if len(config.ExcludedLanguages) > 0 {
+			rankedLanguages = aggregator.FilterExcludedLanguages(rankedLanguages, config.ExcludedLanguages)
+		}
 	}
 
 	// コミット履歴の集計

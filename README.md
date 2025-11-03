@@ -81,6 +81,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           exclude_forks: "true"
+          exclude_languages: "HTML,CSS,JSON" # 除外する言語名（カンマ区切り）
         # 注意: このアクションは内部で自動的にコミットとプッシュを実行します
         # permissions: contents: write により認証情報が自動的に設定されるため、
         # github_token_write は不要です
@@ -93,6 +94,7 @@ jobs:
 - **トークンの設定**: `github_token` には `secrets.GITHUB_TOKEN` を渡してください。プライベートリポジトリを読み取る場合は、より広範囲な権限を持つ Personal Access Token を `github_token` に設定してください。
 - **認証ユーザーの自動取得**: このツールは認証ユーザー自身のリポジトリのみを取得します。認証ユーザーは自動的に取得されるため、ユーザー名の指定は不要です。
 - **フォークの除外**: `exclude_forks: "true"` を設定すると、フォークされたリポジトリは統計から除外されます。
+- **言語の除外**: `exclude_languages` パラメーターでランキングから除外する言語を指定できます。カンマ区切りで複数の言語を指定可能です（例: `"HTML,CSS,JSON"`）。大文字小文字は区別されません。
 
 ## プロジェクト構成
 

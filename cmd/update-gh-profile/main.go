@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/watsumi/update-gh-profile/internal/config"
 	"github.com/watsumi/update-gh-profile/internal/logger"
@@ -15,7 +16,8 @@ import (
 func main() {
 	// コマンドライン引数のパース
 	var (
-		excludeForksStr = flag.String("exclude-forks", "true", "フォークリポジトリを除外するか（true/false）")
+		excludeForksStr     = flag.String("exclude-forks", "true", "フォークリポジトリを除外するか（true/false）")
+		excludeLanguagesStr = flag.String("exclude-languages", "", "ランキングから除外する言語名（カンマ区切り、例: JSON,Markdown,Text）")
 	)
 	flag.Parse()
 
@@ -48,6 +50,16 @@ func main() {
 		excludeForks = true
 	}
 
+	// 除外言語の設定（環境変数またはコマンドライン引数から）
+	var excludedLanguages []string
+	if excludeLanguagesEnv := os.Getenv("EXCLUDE_LANGUAGES"); excludeLanguagesEnv != "" {
+		// 環境変数から読み込み
+		excludedLanguages = parseLanguageList(excludeLanguagesEnv)
+	} else if *excludeLanguagesStr != "" {
+		// コマンドライン引数から読み込み
+		excludedLanguages = parseLanguageList(*excludeLanguagesStr)
+	}
+
 	fmt.Println("\n✅ GitHub API クライアントの初期化に成功しました！")
 
 	// ログレベルの設定（環境変数から読み込み）
@@ -60,13 +72,14 @@ func main() {
 	// ワークフロー設定
 	// RepoPath は空文字列にすることで、GitHub Actions環境では GITHUB_WORKSPACE を自動的に使用
 	workflowConfig := workflow.Config{
-		RepoPath:        "",                                     // 空文字列 = GitHub Actions環境では GITHUB_WORKSPACE を使用
-		SVGOutputDir:    ".",                                    // SVG ファイルの出力先
-		Timezone:        "UTC",                                  // タイムゾーン
-		CommitMessage:   "chore: update GitHub profile metrics", // Git コミットメッセージ
-		MaxRepositories: 0,                                      // 0 = すべてのリポジトリ
-		ExcludeForks:    excludeForks,
-		LogLevel:        logLevel, // ログレベル
+		RepoPath:          "",                                     // 空文字列 = GitHub Actions環境では GITHUB_WORKSPACE を使用
+		SVGOutputDir:      ".",                                    // SVG ファイルの出力先
+		Timezone:          "UTC",                                  // タイムゾーン
+		CommitMessage:     "chore: update GitHub profile metrics", // Git コミットメッセージ
+		MaxRepositories:   0,                                      // 0 = すべてのリポジトリ
+		ExcludeForks:      excludeForks,
+		ExcludedLanguages: excludedLanguages, // 除外する言語リスト
+		LogLevel:          logLevel,          // ログレベル
 	}
 
 	// ワークフローを実行
@@ -79,4 +92,25 @@ func main() {
 
 	fmt.Println("\n✅ すべての処理が完了しました！")
 	os.Exit(0)
+}
+
+// parseLanguageList カンマ区切りの言語名文字列をスライスに変換する
+func parseLanguageList(languagesStr string) []string {
+	if languagesStr == "" {
+		return []string{}
+	}
+
+	// カンマで分割
+	parts := strings.Split(languagesStr, ",")
+	languages := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		// 空白を削除
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			languages = append(languages, trimmed)
+		}
+	}
+
+	return languages
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 
 	"github.com/google/go-github/v76/github"
 )
@@ -132,5 +133,45 @@ func FilterMinorLanguages(rankedLanguages []LanguageStat, threshold float64) []L
 	}
 
 	log.Printf("閾値（%.2f%%）によるフィルタリング完了: %d 言語 → %d 言語", threshold, len(rankedLanguages), len(filtered))
+	return filtered
+}
+
+// FilterExcludedLanguages 指定された言語を除外する
+//
+// Preconditions:
+// - rankedLanguages がランキング済み言語スライスであること
+// - excludedLanguages が除外する言語名のスライスであること（空でも可）
+//
+// Postconditions:
+// - 返されるスライスは除外リストに含まれていない言語のみを含む
+//
+// Invariants:
+// - 元のスライスの順序が保持される
+// - 大文字小文字を区別せずに比較する
+func FilterExcludedLanguages(rankedLanguages []LanguageStat, excludedLanguages []string) []LanguageStat {
+	if len(excludedLanguages) == 0 {
+		return rankedLanguages
+	}
+
+	// 除外リストを大文字小文字を区別しない比較のためにmapに変換
+	excludedMap := make(map[string]bool)
+	for _, lang := range excludedLanguages {
+		// 空白を削除し、大文字小文字を区別しない比較のために小文字に変換
+		normalized := strings.TrimSpace(strings.ToLower(lang))
+		if normalized != "" {
+			excludedMap[normalized] = true
+		}
+	}
+
+	var filtered []LanguageStat
+	for _, lang := range rankedLanguages {
+		// 言語名を正規化して比較
+		normalized := strings.ToLower(lang.Language)
+		if !excludedMap[normalized] {
+			filtered = append(filtered, lang)
+		}
+	}
+
+	log.Printf("除外言語によるフィルタリング完了: %d 言語 → %d 言語（除外: %v）", len(rankedLanguages), len(filtered), excludedLanguages)
 	return filtered
 }

@@ -38,14 +38,6 @@ go build -o update-gh-profile cmd/update-gh-profile/main.go
 
 ### Usage with GitHub Actions
 
-This repository can be used in GitHub Actions workflows of other repositories.
-
-For details, see:
-
-- [README_ACTION.md](README_ACTION.md) - Basic usage instructions
-- [USAGE_ACTION.md](USAGE_ACTION.md) - Detailed usage examples
-- [PRIVATE_REPO_SETUP.md](PRIVATE_REPO_SETUP.md) - Setup instructions for private repositories
-
 #### Quick Start
 
 ```yaml

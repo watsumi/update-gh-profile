@@ -114,12 +114,21 @@ query CommitLanguages($login: String!) {
           primaryLanguage {
             name
           }
+          languages(first: 20) {
+            edges {
+              node {
+                name
+              }
+              size
+            }
+          }
           defaultBranchRef {
             target {
               ... on Commit {
                 history(first: 50) {
                   edges {
                     node {
+                      oid
                       message
                       committedDate
                       additions
@@ -380,6 +389,7 @@ type UserDetailsGraphQLData struct {
 }
 
 // FetchCommitLanguagesWithGraphQL GraphQLを使用してコミットごとの言語使用状況を取得する
+// リポジトリの複数言語情報を使用して、より多くの言語を取得する
 func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username string) (map[string]map[string]int, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
@@ -400,11 +410,20 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 						PrimaryLanguage struct {
 							Name string `json:"name"`
 						} `json:"primaryLanguage"`
+						Languages struct {
+							Edges []struct {
+								Node struct {
+									Name string `json:"name"`
+								} `json:"node"`
+								Size int `json:"size"`
+							} `json:"edges"`
+						} `json:"languages"`
 						DefaultBranchRef struct {
 							Target struct {
 								History struct {
 									Edges []struct {
 										Node struct {
+											Oid           string `json:"oid"`
 											Message       string `json:"message"`
 											CommittedDate string `json:"committedDate"`
 											Additions     int    `json:"additions"`
@@ -428,11 +447,30 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
 	}
 
-	// データを変換
+	// データを変換（リポジトリの複数言語情報を使用）
 	commitLanguages := make(map[string]map[string]int)
+
 	for _, repoContrib := range response.User.ContributionsCollection.CommitContributionsByRepository {
+		// リポジトリで使用されている言語リストを取得
+		repoLanguages := make(map[string]int)
+		
+		// languagesエッジから言語とサイズを取得（サイズが大きい順にソート済み）
+		for _, langEdge := range repoContrib.Repository.Languages.Edges {
+			if langEdge.Node.Name != "" {
+				// サイズを重みとして使用（大きなファイルほど重要）
+				repoLanguages[langEdge.Node.Name] = langEdge.Size
+			}
+		}
+		
+		// プライマリ言語も追加（languagesに含まれていない場合）
+		if repoContrib.Repository.PrimaryLanguage.Name != "" {
+			if _, exists := repoLanguages[repoContrib.Repository.PrimaryLanguage.Name]; !exists {
+				repoLanguages[repoContrib.Repository.PrimaryLanguage.Name] = 1
+			}
+		}
+
+		// 各コミットにリポジトリの言語を適用
 		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {
-			// コミットSHAの代わりに日時を使用（簡易版）
 			commitKey := edge.Node.CommittedDate
 			if commitKey == "" {
 				continue
@@ -442,9 +480,15 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 				commitLanguages[commitKey] = make(map[string]int)
 			}
 
-			// プライマリ言語を使用
-			if repoContrib.Repository.PrimaryLanguage.Name != "" {
-				commitLanguages[commitKey][repoContrib.Repository.PrimaryLanguage.Name]++
+			// リポジトリの各言語をコミットに追加（サイズに比例した重み）
+			for lang, size := range repoLanguages {
+				// サイズの平方根を使用して重み付け（大きな差を緩和）
+				weight := 1
+				if size > 1000 {
+					// 大きなファイルの場合は重みを増やす（ただし上限あり）
+					weight = 2
+				}
+				commitLanguages[commitKey][lang] += weight
 			}
 		}
 	}

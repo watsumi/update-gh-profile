@@ -10,34 +10,34 @@ import (
 	"github.com/watsumi/update-gh-profile/internal/logger"
 )
 
-// FetchViewerGenerated 生成された型を使用して認証ユーザー情報を取得
+// FetchViewerGenerated fetches authenticated user information using generated types
 func FetchViewerGenerated(ctx context.Context, token string) (string, string, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return "", "", fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return "", "", fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	var query ghgraphql.ViewerQuery
 	err = graphqlClient.Query(ctx, &query, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		return "", "", fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
 	return query.Viewer.Login, query.Viewer.ID, nil
 }
 
-// FetchRepositoriesWithGraphQLGenerated 生成された型を使用してリポジトリ情報を一括取得
+// FetchRepositoriesWithGraphQLGenerated fetches repository information in bulk using generated types
 func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, username string, excludeForks bool) ([]*RepositoryGraphQLData, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	var allRepos []*RepositoryGraphQLData
 	var after *string
 
-	// 文字列ベースのクエリを使用（オプショナル変数を適切に処理するため）
-	// 既存のQueryReposPerLanguageと同じ形式で統一
+	// Use string-based query (to properly handle optional variables)
+	// Unified with the same format as existing QueryReposPerLanguage
 	queryStr := `query ReposQuery($login: String!, $isFork: Boolean, $first: Int, $after: String) {
   user(login: $login) {
     repositories(isFork: $isFork, first: $first, after: $after, ownerAffiliations: OWNER) {
@@ -84,76 +84,76 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 }`
 
 	for {
-		// 変数をmapに変換
+		// Convert variables to map
 		variables := map[string]interface{}{
 			"login":  username,
 			"isFork": !excludeForks,
-			"first":  30, // ページサイズを30に縮小してタイムアウトを防ぐ
+			"first":  30, // Reduce page size to 30 to prevent timeout
 		}
 		if after != nil {
 			variables["after"] = *after
 		}
 
-		// Execメソッドで文字列クエリと生成された型を組み合わせて使用
-		// Execはdataフィールドを自動unwrapするため、直接型を渡す
+		// Use Exec method to combine string query with generated types
+		// Exec automatically unwraps data field, so pass type directly
 		var query ghgraphql.ReposQuery
 
-		// リトライロジック: 502 Bad Gatewayなどの一時的なエラーに対応
+		// Retry logic: handle transient errors like 502 Bad Gateway
 		const maxRetries = 5
 		const baseRetryDelay = 5 * time.Second
 		var lastErr error
 
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			if attempt > 0 {
-				// 指数バックオフでリトライ前に待機
-				// 1回目: 5秒、2回目: 10秒、3回目: 20秒、4回目: 40秒
+				// Wait before retry with exponential backoff
+				// 1st: 5s, 2nd: 10s, 3rd: 20s, 4th: 40s
 				retryDelay := baseRetryDelay * time.Duration(1<<uint(attempt-1))
-				logger.Info("GraphQLクエリのリトライ: %d/%d回目（%v待機後）", attempt+1, maxRetries, retryDelay)
+				logger.Info("Retrying GraphQL query: %d/%d (waiting %v)", attempt+1, maxRetries, retryDelay)
 				select {
 				case <-ctx.Done():
-					return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
+					return nil, fmt.Errorf("context cancelled: %w", ctx.Err())
 				case <-time.After(retryDelay):
-					// 待機完了
+					// Wait completed
 				}
 			}
 
-			logger.Debug("GraphQLクエリを実行中（試行 %d/%d）...", attempt+1, maxRetries)
+			logger.Debug("Executing GraphQL query (attempt %d/%d)...", attempt+1, maxRetries)
 
-			// リクエスト前に少し待機してGitHub APIへの負荷を軽減
-			// 最初のリクエストとページネーション後のリクエストで待機
+			// Wait a bit before request to reduce load on GitHub API
+			// Wait on first request and after pagination
 			if attempt == 0 {
 				var waitTime time.Duration
 				if after == nil {
-					// 最初のページリクエスト
+					// First page request
 					waitTime = 1 * time.Second
 				} else {
-					// ページネーション後のリクエスト（より長い待機）
+					// Request after pagination (longer wait)
 					waitTime = 2 * time.Second
 				}
-				logger.Debug("リクエスト前に%v待機します...", waitTime)
+				logger.Debug("Waiting %v before request...", waitTime)
 				select {
 				case <-ctx.Done():
-					return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
+					return nil, fmt.Errorf("context cancelled: %w", ctx.Err())
 				case <-time.After(waitTime):
-					// 待機完了
+					// Wait completed
 				}
 			}
 
 			err = graphqlClient.Exec(ctx, queryStr, &query, variables)
 			if err == nil {
 				if attempt > 0 {
-					logger.Info("GraphQLクエリが成功しました（%d回目の試行で成功）", attempt+1)
+					logger.Info("GraphQL query succeeded (succeeded on attempt %d)", attempt+1)
 				}
-				break // 成功
+				break // Success
 			}
 
 			lastErr = err
 			errStr := err.Error()
-			logger.Warning("GraphQLクエリの実行に失敗しました（試行 %d/%d）: %v", attempt+1, maxRetries, err)
+			logger.Warning("Failed to execute GraphQL query (attempt %d/%d): %v", attempt+1, maxRetries, err)
 
-			// 502 Bad Gateway や 503 Service Unavailable などの一時的なエラーの場合はリトライ
+			// Retry on transient errors like 502 Bad Gateway or 503 Service Unavailable
 			lowerErrStr := strings.ToLower(errStr)
-			logger.Debug("エラー文字列（小文字）: %s", lowerErrStr)
+			logger.Debug("Error string (lowercase): %s", lowerErrStr)
 			isRetryableError := strings.Contains(lowerErrStr, "502") ||
 				strings.Contains(lowerErrStr, "503") ||
 				strings.Contains(lowerErrStr, "504") ||
@@ -174,21 +174,21 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 				strings.Contains(lowerErrStr, "parse error")
 
 			if !isRetryableError {
-				// 一時的なエラーでない場合は即座に返す
-				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました（リトライ不可なエラー）: %w", err)
+				// Return immediately if not a transient error
+				return nil, fmt.Errorf("failed to execute GraphQL query (non-retryable error): %w", err)
 			}
 
-			// 最後の試行でエラーが残っている場合はログに記録
+			// Log error if remaining after last attempt
 			if attempt == maxRetries-1 {
-				logger.Error("GraphQLクエリの実行に失敗しました（%d回リトライ後）: %v", maxRetries, lastErr)
-				return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました（%d回リトライ後）: %w", maxRetries, lastErr)
+				logger.Error("Failed to execute GraphQL query (after %d retries): %v", maxRetries, lastErr)
+				return nil, fmt.Errorf("failed to execute GraphQL query (after %d retries): %w", maxRetries, lastErr)
 			}
 		}
 
-		// lastErrがnilでない場合（リトライが失敗した場合）は既にエラーが返されている
-		// ここでのチェックは不要（err == nilでbreakしているため）
+		// If lastErr is not nil (retry failed), error has already been returned
+		// Check here is unnecessary (because we break when err == nil)
 
-		// 生成された型からRepositoryGraphQLDataに変換
+		// Convert from generated type to RepositoryGraphQLData
 		for _, repo := range query.User.Repositories.Nodes {
 			repoData := &RepositoryGraphQLData{
 				Name:           repo.Name,
@@ -206,9 +206,9 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 			// Languages
 			if repo.Languages != nil {
 				repoData.Languages.TotalSize = repo.Languages.TotalSize
-				// LanguageConnectionのnodesはLanguage型（sizeフィールドなし）
-				// edgesにsizeがあるので、edgesを使用するか、nodesだけを保存する
-				// ここではedgesを使用してsizeも取得
+				// LanguageConnection's nodes are Language type (no size field)
+				// edges have size, so use edges or save only nodes
+				// Here we use edges to also get size
 				if len(repo.Languages.Edges) > 0 {
 					for _, edge := range repo.Languages.Edges {
 						repoData.Languages.Nodes = append(repoData.Languages.Nodes, struct {
@@ -220,14 +220,14 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 						})
 					}
 				} else {
-					// edgesが空の場合はnodesを使用
+					// Use nodes if edges are empty
 					for _, lang := range repo.Languages.Nodes {
 						repoData.Languages.Nodes = append(repoData.Languages.Nodes, struct {
 							Name string `json:"name"`
 							Size int    `json:"size"`
 						}{
 							Name: lang.Name,
-							Size: 0, // size情報がない場合は0
+							Size: 0, // Use 0 if size information is not available
 						})
 					}
 				}
@@ -264,29 +264,29 @@ func FetchRepositoriesWithGraphQLGenerated(ctx context.Context, token string, us
 		}
 		after = stringPtr(query.User.Repositories.PageInfo.EndCursor)
 
-		// 次のページ取得前に待機してGitHub APIへの負荷を軽減
-		// ページネーション時はより長い待機時間を設定
+		// Wait before fetching next page to reduce load on GitHub API
+		// Set longer wait time for pagination
 		waitTime := 2 * time.Second
-		logger.Info("次のページを取得する前に%v待機します...（取得済み: %dリポジトリ）", waitTime, len(allRepos))
+		logger.Info("Waiting %v before fetching next page... (fetched: %d repositories)", waitTime, len(allRepos))
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("コンテキストがキャンセルされました: %w", ctx.Err())
+			return nil, fmt.Errorf("context cancelled: %w", ctx.Err())
 		case <-time.After(waitTime):
-			// 待機完了
+			// Wait completed
 		}
 	}
 
 	return allRepos, nil
 }
 
-// FetchUserDetailsWithGraphQLGenerated 生成された型を使用してユーザー詳細情報を取得
+// FetchUserDetailsWithGraphQLGenerated fetches user details using generated types
 func FetchUserDetailsWithGraphQLGenerated(ctx context.Context, token string, username string) (*UserDetailsGraphQLData, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
-	// 変数をmapに変換
+	// Convert variables to map
 	variables := map[string]interface{}{
 		"login": username,
 	}
@@ -294,10 +294,10 @@ func FetchUserDetailsWithGraphQLGenerated(ctx context.Context, token string, use
 	var query ghgraphql.UserDetailsQuery
 	err = graphqlClient.Query(ctx, &query, variables)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
-	// 生成された型からUserDetailsGraphQLDataに変換
+	// Convert from generated type to UserDetailsGraphQLData
 	userDetails := &UserDetailsGraphQLData{
 		ID:        query.User.ID,
 		Name:      query.User.Name,

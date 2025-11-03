@@ -8,52 +8,52 @@ import (
 	"github.com/google/go-github/v76/github"
 )
 
-// FetchUserRepositories GitHub API を使用して認証ユーザーのリポジトリ一覧を取得する
+// FetchUserRepositories fetches a list of repositories for the authenticated user using GitHub API
 //
 // Preconditions:
-// - username が非空文字列であること
-// - client が有効な GitHub クライアントであること
-// - isAuthenticatedUser が true であること（認証ユーザー自身のみ対応）
+// - username is a non-empty string
+// - client is a valid GitHub client
+// - isAuthenticatedUser is true (only supports authenticated user's own repositories)
 //
 // Postconditions:
-// - フォークを除外する場合は、Fork=false のリポジトリのみが返される
-// - スライスはリポジトリ構造体のスライスである
-// - 認証ユーザー自身のリポジトリ（プライベート含む）を取得する
+// - If forks are excluded, only Fork=false repositories are returned
+// - Return value is a slice of repository structs
+// - Fetches repositories owned by the authenticated user (including private ones)
 //
 // Invariants:
-// - API レート制限に達した場合は待機して再試行する
-// - 認証ユーザー自身のリポジトリのみを取得する
+// - Waits and retries when API rate limit is reached
+// - Only fetches repositories owned by the authenticated user
 func FetchUserRepositories(ctx context.Context, client *github.Client, username string, excludeForks bool, isAuthenticatedUser bool) ([]*github.Repository, error) {
 	if err := ValidateUsername(username); err != nil {
 		return nil, err
 	}
 
 	if !isAuthenticatedUser {
-		return nil, fmt.Errorf("このツールは認証ユーザー自身のリポジトリのみを取得できます")
+		return nil, fmt.Errorf("this tool can only fetch repositories owned by the authenticated user")
 	}
 
-	log.Printf("リポジトリ一覧を取得しています: 認証ユーザー=%s, フォーク除外=%v", username, excludeForks)
+	log.Printf("Fetching repository list: authenticated user=%s, exclude forks=%v", username, excludeForks)
 
-	// ページネーション用のオプション
-	// Type: "all" を指定することで、プライベートリポジトリも含めて取得
-	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
+	// Options for pagination
+	// Type: "all" allows fetching private repositories as well
+	// Reference: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
 	opt := &github.RepositoryListOptions{
-		Type:      "owner", // all, owner, member から選択（認証ユーザーの場合は all でプライベートも取得可能）
+		Type:      "owner", // Choose from all, owner, member (for authenticated user, "all" allows fetching private repos)
 		Sort:      "updated",
 		Direction: "desc",
 		ListOptions: github.ListOptions{
 			PerPage: DefaultPerPage,
-			Page:    0, // 最初のページ
+			Page:    0, // First page
 		},
 	}
 
 	var allRepos []*github.Repository
 
-	// ページネーションループ: 全ページを取得するまで繰り返す
-	// username を空文字列にすると、認証ユーザー自身のリポジトリ（プライベート含む）を取得
-	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
+	// Pagination loop: repeat until all pages are fetched
+	// Passing empty string for username fetches repositories owned by the authenticated user (including private)
+	// Reference: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user
 	for pageNum := 1; pageNum <= MaxPages; pageNum++ {
-		// ページ番号を設定（GitHub APIは1から開始）
+		// Set page number (GitHub API starts from 1)
 		if pageNum > 1 {
 			opt.Page = pageNum
 		}
@@ -61,129 +61,129 @@ func FetchUserRepositories(ctx context.Context, client *github.Client, username 
 		repos, resp, err := client.Repositories.List(ctx, "", opt)
 
 		if err != nil {
-			return nil, fmt.Errorf("リポジトリ一覧の取得に失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to fetch repository list: %w", err)
 		}
 
-		// レート制限のチェックと処理
+		// Check and handle rate limit
 		if err := HandleRateLimit(ctx, resp); err != nil {
-			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to handle rate limit: %w", err)
 		}
 
-		// 取得したリポジトリを追加
+		// Add fetched repositories
 		allRepos = append(allRepos, repos...)
 
-		// デバッグ: ページネーション情報をログに出力
-		log.Printf("取得したリポジトリ数: %d (累計: %d)", len(repos), len(allRepos))
-		log.Printf("ページネーション情報: 現在ページ=%d (手動=%d), 次ページ=%d, 最終ページ=%d, PerPage=%d",
+		// Debug: output pagination information to log
+		log.Printf("Fetched repositories: %d (total: %d)", len(repos), len(allRepos))
+		log.Printf("Pagination info: current page=%d (manual=%d), next page=%d, last page=%d, PerPage=%d",
 			opt.Page, pageNum, resp.NextPage, resp.LastPage, opt.PerPage)
 
-		// 次のページがあるか確認（共通関数を使用）
+		// Check if there is a next page (using common function)
 		paginationResult := CheckPagination(resp, len(repos), opt.PerPage)
 
 		if !paginationResult.HasNextPage {
-			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d, PerPage: %d）", len(repos), opt.PerPage)
+			log.Printf("No next page, ending pagination (fetched: %d, PerPage: %d)", len(repos), opt.PerPage)
 			break
 		}
 
-		// 最大ページ数チェック（次のページに進む前に確認）
+		// Check max page count (before advancing to next page)
 		if pageNum >= MaxPages {
-			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", MaxPages, len(allRepos))
+			log.Printf("Warning: reached max page count (%d). Ending pagination (total: %d)", MaxPages, len(allRepos))
 			break
 		}
 
-		// 次のページ番号を決定
+		// Determine next page number
 		if paginationResult.NextPageNum != 0 {
-			pageNum = paginationResult.NextPageNum - 1 // pageNum はループでインクリメントされるため -1
+			pageNum = paginationResult.NextPageNum - 1 // -1 because pageNum is incremented in the loop
 		}
-		log.Printf("次のページを取得します（ページ番号: %d / 最大: %d）...", pageNum+1, MaxPages)
+		log.Printf("Fetching next page (page number: %d / max: %d)...", pageNum+1, MaxPages)
 	}
 
-	log.Printf("全リポジトリ取得完了: %d 件", len(allRepos))
+	log.Printf("Finished fetching all repositories: %d", len(allRepos))
 
-	// フォークリポジトリの除外処理
+	// Exclude fork repositories
 	if excludeForks {
 		var filteredRepos []*github.Repository
 		for _, repo := range allRepos {
-			// GetFork() メソッドでフォークかどうかを確認
+			// Check if fork using GetFork() method
 			if !repo.GetFork() {
 				filteredRepos = append(filteredRepos, repo)
 			}
 		}
 		allRepos = filteredRepos
-		log.Printf("フォーク除外後のリポジトリ数: %d 件", len(allRepos))
+		log.Printf("Repositories after excluding forks: %d", len(allRepos))
 	}
 
 	return allRepos, nil
 }
 
-// FetchRepositoryLanguages 指定されたリポジトリの言語統計を取得する
+// FetchRepositoryLanguages fetches language statistics for the specified repository
 //
 // Preconditions:
-// - owner と repo が有効なリポジトリ識別子であること
-// - client が有効な GitHub クライアントであること
+// - owner and repo are valid repository identifiers
+// - client is a valid GitHub client
 //
 // Postconditions:
-// - 返される map は map[string]int{言語名: バイト数} の形式である
-// - エラー時は nil と error を返す
+// - Returned map is in the format map[string]int{language name: bytes}
+// - Returns nil and error on error
 //
 // Invariants:
-// - API エラー時は適切なエラーを返す
-// - レート制限に達した場合は待機して再試行する
+// - Returns appropriate error on API error
+// - Waits and retries when rate limit is reached
 func FetchRepositoryLanguages(ctx context.Context, client *github.Client, owner, repo string) (map[string]int, error) {
 	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
 		return nil, err
 	}
 
-	// GitHub API の /repos/{owner}/{repo}/languages エンドポイントを呼び出す
-	// 参考: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-languages
+	// Call GitHub API /repos/{owner}/{repo}/languages endpoint
+	// Reference: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-languages
 	languages, resp, err := client.Repositories.ListLanguages(ctx, owner, repo)
 
 	if err != nil {
-		return nil, fmt.Errorf("リポジトリ %s/%s の言語情報取得に失敗しました: %w", owner, repo, err)
+		return nil, fmt.Errorf("failed to fetch language information for repository %s/%s: %w", owner, repo, err)
 	}
 
-	// レート制限のチェックと処理
+	// Check and handle rate limit
 	if err := HandleRateLimit(ctx, resp); err != nil {
-		return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to handle rate limit: %w", err)
 	}
 
-	// languages は map[string]int{言語名: バイト数} の形式
+	// languages is in the format map[string]int{language name: bytes}
 	return languages, nil
 }
 
-// FetchCommits 指定されたリポジトリのコミット履歴を取得する
+// FetchCommits fetches commit history for the specified repository
 //
 // Preconditions:
-// - owner と repo が有効なリポジトリ識別子であること
-// - client が有効な GitHub クライアントであること
+// - owner and repo are valid repository identifiers
+// - client is a valid GitHub client
 //
 // Postconditions:
-// - 返されるスライスはコミット情報のリストである
-// - ページネーションを使用して全コミットを取得する（最大100ページまで）
+// - Returned slice is a list of commit information
+// - Fetches all commits using pagination (up to 100 pages)
 //
 // Invariants:
-// - API レート制限に達した場合は待機して再試行する
+// - Waits and retries when API rate limit is reached
 func FetchCommits(ctx context.Context, client *github.Client, owner, repo string) ([]*github.RepositoryCommit, error) {
 	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
 		return nil, err
 	}
 
-	log.Printf("リポジトリ %s/%s のコミット履歴を取得しています...", owner, repo)
+	log.Printf("Fetching commit history for repository %s/%s...", owner, repo)
 
-	// ページネーション用のオプション
+	// Options for pagination
 	opt := &github.CommitsListOptions{
 		ListOptions: github.ListOptions{
 			PerPage: DefaultPerPage,
-			Page:    0, // 最初のページ
+			Page:    0, // First page
 		},
 	}
 
 	var allCommits []*github.RepositoryCommit
 
-	// ページネーションループ: 全ページを取得するまで繰り返す
-	// 参考: https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#list-commits
+	// Pagination loop: repeat until all pages are fetched
+	// Reference: https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#list-commits
 	for pageNum := 1; pageNum <= MaxPages; pageNum++ {
-		// ページ番号を設定
+		// Set page number
 		if pageNum > 1 {
 			opt.Page = pageNum
 		}
@@ -191,175 +191,175 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 		commits, resp, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
 
 		if err != nil {
-			return nil, fmt.Errorf("リポジトリ %s/%s のコミット履歴取得に失敗しました: %w", owner, repo, err)
+			return nil, fmt.Errorf("failed to fetch commit history for repository %s/%s: %w", owner, repo, err)
 		}
 
-		// レート制限のチェックと処理
+		// Check and handle rate limit
 		if err := HandleRateLimit(ctx, resp); err != nil {
-			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to handle rate limit: %w", err)
 		}
 
-		// 取得したコミットを追加
+		// Add fetched commits
 		allCommits = append(allCommits, commits...)
 
-		log.Printf("取得したコミット数: %d (累計: %d)", len(commits), len(allCommits))
+		log.Printf("Fetched commits: %d (total: %d)", len(commits), len(allCommits))
 
-		// 次のページがあるか確認（共通関数を使用）
+		// Check if there is a next page (using common function)
 		paginationResult := CheckPagination(resp, len(commits), opt.PerPage)
 
 		if !paginationResult.HasNextPage {
-			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d）", len(commits))
+			log.Printf("No next page, ending pagination (fetched: %d)", len(commits))
 			break
 		}
 
-		// 最大ページ数チェック
+		// Check max page count
 		if pageNum >= MaxPages {
-			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", MaxPages, len(allCommits))
+			log.Printf("Warning: reached max page count (%d). Ending pagination (total: %d)", MaxPages, len(allCommits))
 			break
 		}
 
-		// 次のページ番号を決定
+		// Determine next page number
 		if paginationResult.NextPageNum != 0 {
-			pageNum = paginationResult.NextPageNum - 1 // pageNum はループでインクリメントされるため -1
+			pageNum = paginationResult.NextPageNum - 1 // -1 because pageNum is incremented in the loop
 		}
 	}
 
-	log.Printf("リポジトリ %s/%s のコミット履歴取得完了: %d 件", owner, repo, len(allCommits))
+	log.Printf("Finished fetching commit history for repository %s/%s: %d", owner, repo, len(allCommits))
 	return allCommits, nil
 }
 
-// FetchCommitHistory 指定されたリポジトリの日付ごとのコミット数を取得する
+// FetchCommitHistory fetches commit count per date for the specified repository
 //
 // Preconditions:
-// - owner と repo が有効なリポジトリ識別子であること
-// - client が有効な GitHub クライアントであること
+// - owner and repo are valid repository identifiers
+// - client is a valid GitHub client
 //
 // Postconditions:
-// - 返される map は map[string]int{日付(YYYY-MM-DD): コミット数} の形式である
+// - Returned map is in the format map[string]int{date(YYYY-MM-DD): commit count}
 //
 // Invariants:
-// - 日付は YYYY-MM-DD 形式で記録される
-// - 日付は UTC で記録される
+// - Dates are recorded in YYYY-MM-DD format
+// - Dates are recorded in UTC
 func FetchCommitHistory(ctx context.Context, client *github.Client, owner, repo string) (map[string]int, error) {
 	commits, err := FetchCommits(ctx, client, owner, repo)
 	if err != nil {
 		return nil, err
 	}
 
-	// 日付ごとのコミット数を集計
+	// Aggregate commit count per date
 	history := make(map[string]int)
 	for _, commit := range commits {
-		// コミットの日時を取得（コミッターの日時を使用）
+		// Get commit timestamp (using committer's timestamp)
 		if commit.Commit == nil || commit.Commit.Committer == nil || commit.Commit.Committer.Date == nil {
 			continue
 		}
 
-		// UTC で日付を取得（YYYY-MM-DD形式）
+		// Get date in UTC (YYYY-MM-DD format)
 		date := commit.Commit.Committer.Date.Time.UTC()
 		dateStr := date.Format("2006-01-02")
 		history[dateStr]++
 	}
 
-	log.Printf("リポジトリ %s/%s のコミット履歴集計完了: %d 日分", owner, repo, len(history))
+	log.Printf("Finished aggregating commit history for repository %s/%s: %d days", owner, repo, len(history))
 	return history, nil
 }
 
-// FetchCommitTimeDistribution 指定されたリポジトリの時間帯ごとのコミット数を取得する
+// FetchCommitTimeDistribution fetches commit count per time slot for the specified repository
 //
 // Preconditions:
-// - owner と repo が有効なリポジトリ識別子であること
-// - client が有効な GitHub クライアントであること
+// - owner and repo are valid repository identifiers
+// - client is a valid GitHub client
 //
 // Postconditions:
-// - 返される map は map[int]int{時間帯(0-23): コミット数} の形式である
-// - 時間帯は UTC で集計される
+// - Returned map is in the format map[int]int{time slot(0-23): commit count}
+// - Time slots are aggregated in UTC
 //
 // Invariants:
-// - 時間帯は 0-23 の範囲で記録される
+// - Time slots are recorded in the range 0-23
 func FetchCommitTimeDistribution(ctx context.Context, client *github.Client, owner, repo string) (map[int]int, error) {
 	commits, err := FetchCommits(ctx, client, owner, repo)
 	if err != nil {
 		return nil, err
 	}
 
-	// 時間帯ごとのコミット数を集計（0-23時）
+	// Aggregate commit count per time slot (0-23 hours)
 	distribution := make(map[int]int)
 	for _, commit := range commits {
-		// コミットの日時を取得（コミッターの日時を使用）
+		// Get commit timestamp (using committer's timestamp)
 		if commit.Commit == nil || commit.Commit.Committer == nil || commit.Commit.Committer.Date == nil {
 			continue
 		}
 
-		// UTC で時間帯を取得（0-23時）
+		// Get time slot in UTC (0-23 hours)
 		date := commit.Commit.Committer.Date.Time.UTC()
 		hour := date.Hour()
 		distribution[hour]++
 	}
 
-	log.Printf("リポジトリ %s/%s のコミット時間帯分布集計完了: %d 時間帯", owner, repo, len(distribution))
+	log.Printf("Finished aggregating commit time distribution for repository %s/%s: %d time slots", owner, repo, len(distribution))
 	return distribution, nil
 }
 
-// FetchCommitLanguages 指定されたリポジトリのコミットごとの使用言語を取得する
+// FetchCommitLanguages fetches languages used per commit for the specified repository
 //
 // Preconditions:
-// - owner と repo が有効なリポジトリ識別子であること
-// - client が有効な GitHub クライアントであること
+// - owner and repo are valid repository identifiers
+// - client is a valid GitHub client
 //
 // Postconditions:
-// - 返される map は map[string]map[string]int{コミットSHA: {言語名: 出現回数}} の形式である
-// - 各コミットに対して、変更されたファイルから言語を抽出する
+// - Returned map is in the format map[string]map[string]int{commit SHA: {language name: occurrence count}}
+// - Extracts languages from changed files for each commit
 //
 // Invariants:
-// - 各コミットの変更ファイルから言語を抽出する
-// - 言語名は大文字小文字を区別する（Go, Python など）
+// - Extracts languages from changed files for each commit
+// - Language names are case-sensitive (Go, Python, etc.)
 func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, repo string) (map[string]map[string]int, error) {
 	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
 		return nil, err
 	}
 
-	log.Printf("リポジトリ %s/%s のコミットごとの言語使用状況を取得しています...", owner, repo)
+	log.Printf("Fetching language usage per commit for repository %s/%s...", owner, repo)
 
-	// まずコミット一覧を取得
+	// First, fetch commit list
 	commits, err := FetchCommits(ctx, client, owner, repo)
 	if err != nil {
 		return nil, err
 	}
 
-	// コミットごとの言語使用状況を格納する map
-	// map[コミットSHA]map[言語名]出現回数
+	// Map to store language usage per commit
+	// map[commit SHA]map[language name]occurrence count
 	commitLanguages := make(map[string]map[string]int)
 
-	// 各コミットの詳細情報を取得（変更ファイル情報を含む）
+	// Fetch detailed information for each commit (including changed file information)
 	maxCommits := MaxCommitsForLanguageDetection
 	if len(commits) < maxCommits {
 		maxCommits = len(commits)
 	}
 
-	log.Printf("コミットごとの言語情報を取得中: %d 件のコミットを処理します", maxCommits)
+	log.Printf("Fetching language information per commit: processing %d commits", maxCommits)
 
 	for i := 0; i < maxCommits; i++ {
 		commit := commits[i]
 		sha := commit.GetSHA()
 
-		// コミットの詳細情報を取得（変更ファイル情報を含む）
+		// Fetch detailed information for commit (including changed file information)
 		commitDetail, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, &github.ListOptions{})
 		if err != nil {
-			log.Printf("警告: コミット %s の詳細取得に失敗しました: %v", sha[:7], err)
+			log.Printf("Warning: failed to fetch details for commit %s: %v", sha[:7], err)
 			continue
 		}
 
-		// レート制限のチェックと処理
+		// Check and handle rate limit
 		if err := HandleRateLimit(ctx, resp); err != nil {
-			return nil, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to handle rate limit: %w", err)
 		}
 
-		// このコミットで使用された言語を集計
+		// Aggregate languages used in this commit
 		langs := make(map[string]int)
 
 		if commitDetail.Files != nil {
 			for _, file := range commitDetail.Files {
-				// ファイル名から言語を判定（共通関数を使用）
+				// Detect language from filename (using common function)
 				lang := DetectLanguageFromFilename(file.GetFilename())
 				if lang != "" {
 					langs[lang]++
@@ -371,52 +371,52 @@ func FetchCommitLanguages(ctx context.Context, client *github.Client, owner, rep
 			commitLanguages[sha] = langs
 		}
 
-		// 進捗をログに出力（10コミットごと）
+		// Output progress to log (every 10 commits)
 		if (i+1)%10 == 0 {
-			log.Printf("進捗: %d/%d コミットを処理しました", i+1, maxCommits)
+			log.Printf("Progress: processed %d/%d commits", i+1, maxCommits)
 		}
 	}
 
-	log.Printf("リポジトリ %s/%s のコミットごとの言語使用状況取得完了: %d コミット", owner, repo, len(commitLanguages))
+	log.Printf("Finished fetching language usage per commit for repository %s/%s: %d commits", owner, repo, len(commitLanguages))
 	return commitLanguages, nil
 }
 
-// FetchPullRequests 指定されたリポジトリのプルリクエスト数を取得する
+// FetchPullRequests fetches pull request count for the specified repository
 //
 // Preconditions:
-// - owner と repo が有効なリポジトリ識別子であること
-// - client が有効な GitHub クライアントであること
+// - owner and repo are valid repository identifiers
+// - client is a valid GitHub client
 //
 // Postconditions:
-// - 返される値はプルリクエストの総数である
-// - すべての状態（open, closed, all）のプルリクエストを集計する
+// - Returned value is the total number of pull requests
+// - Aggregates pull requests in all states (open, closed, all)
 //
 // Invariants:
-// - ページネーションを使用して全PRを取得する（最大100ページまで）
-// - API レート制限に達した場合は待機して再試行する
+// - Fetches all PRs using pagination (up to 100 pages)
+// - Waits and retries when API rate limit is reached
 func FetchPullRequests(ctx context.Context, client *github.Client, owner, repo string) (int, error) {
 	if err := ValidateOwnerAndRepo(owner, repo); err != nil {
 		return 0, err
 	}
 
-	log.Printf("リポジトリ %s/%s のプルリクエスト数を取得しています...", owner, repo)
+	log.Printf("Fetching pull request count for repository %s/%s...", owner, repo)
 
-	// ページネーション用のオプション
-	// State: "all" を指定することで、すべての状態（open, closed）のPRを取得
-	// 参考: https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests
+	// Options for pagination
+	// State: "all" fetches PRs in all states (open, closed)
+	// Reference: https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests
 	opt := &github.PullRequestListOptions{
-		State: "all", // "open", "closed", "all" から選択
+		State: "all", // Choose from "open", "closed", "all"
 		ListOptions: github.ListOptions{
 			PerPage: DefaultPerPage,
-			Page:    0, // 最初のページ
+			Page:    0, // First page
 		},
 	}
 
 	var totalCount int
 
-	// ページネーションループ: 全ページを取得するまで繰り返す
+	// Pagination loop: repeat until all pages are fetched
 	for pageNum := 1; pageNum <= MaxPages; pageNum++ {
-		// ページ番号を設定
+		// Set page number
 		if pageNum > 1 {
 			opt.Page = pageNum
 		}
@@ -424,39 +424,39 @@ func FetchPullRequests(ctx context.Context, client *github.Client, owner, repo s
 		pullRequests, resp, err := client.PullRequests.List(ctx, owner, repo, opt)
 
 		if err != nil {
-			return 0, fmt.Errorf("リポジトリ %s/%s のプルリクエスト取得に失敗しました: %w", owner, repo, err)
+			return 0, fmt.Errorf("failed to fetch pull requests for repository %s/%s: %w", owner, repo, err)
 		}
 
-		// レート制限のチェックと処理
+		// Check and handle rate limit
 		if err := HandleRateLimit(ctx, resp); err != nil {
-			return 0, fmt.Errorf("レート制限の処理に失敗しました: %w", err)
+			return 0, fmt.Errorf("failed to handle rate limit: %w", err)
 		}
 
-		// 取得したPR数を追加
+		// Add fetched PR count
 		totalCount += len(pullRequests)
 
-		log.Printf("取得したプルリクエスト数: %d (累計: %d)", len(pullRequests), totalCount)
+		log.Printf("Fetched pull requests: %d (total: %d)", len(pullRequests), totalCount)
 
-		// 次のページがあるか確認（共通関数を使用）
+		// Check if there is a next page (using common function)
 		paginationResult := CheckPagination(resp, len(pullRequests), opt.PerPage)
 
 		if !paginationResult.HasNextPage {
-			log.Printf("次のページがないため、ページネーションを終了します（取得件数: %d）", len(pullRequests))
+			log.Printf("No next page, ending pagination (fetched: %d)", len(pullRequests))
 			break
 		}
 
-		// 最大ページ数チェック
+		// Check max page count
 		if pageNum >= MaxPages {
-			log.Printf("警告: 最大ページ数 (%d) に達しました。ページネーションを終了します（累計: %d 件）", MaxPages, totalCount)
+			log.Printf("Warning: reached max page count (%d). Ending pagination (total: %d)", MaxPages, totalCount)
 			break
 		}
 
-		// 次のページ番号を決定
+		// Determine next page number
 		if paginationResult.NextPageNum != 0 {
-			pageNum = paginationResult.NextPageNum - 1 // pageNum はループでインクリメントされるため -1
+			pageNum = paginationResult.NextPageNum - 1 // -1 because pageNum is incremented in the loop
 		}
 	}
 
-	log.Printf("リポジトリ %s/%s のプルリクエスト数取得完了: %d 件", owner, repo, totalCount)
+	log.Printf("Finished fetching pull request count for repository %s/%s: %d", owner, repo, totalCount)
 	return totalCount, nil
 }

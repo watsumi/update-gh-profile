@@ -32,7 +32,8 @@ func GenerateLanguageChart(rankedLanguages []aggregator.LanguageStat, maxItems i
 	titleHeight := 40
 
 	// Pie chart settings
-	centerX := float64(width) / 2.0
+	// Center X is positioned at 35% of width to leave space for legend on the right
+	centerX := float64(width) * 0.35
 	centerY := float64(titleHeight) + (float64(height-titleHeight-padding) / 2.0)
 	radius := 90.0 // Radius of the pie chart
 

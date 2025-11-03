@@ -11,9 +11,9 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// GraphQLQueries GraphQLクエリ定義
+// GraphQLQueries GraphQL query definitions
 var (
-	// QueryReposPerLanguage リポジトリごとの言語情報を取得するクエリ
+	// QueryReposPerLanguage Query to fetch language information per repository
 	QueryReposPerLanguage = `
 query ReposPerLanguage($login: String!, $endCursor: String) {
   user(login: $login) {
@@ -58,7 +58,7 @@ query ReposPerLanguage($login: String!, $endCursor: String) {
   }
 }`
 
-	// QueryUserDetails ユーザーの詳細情報を取得するクエリ
+	// QueryUserDetails Query to fetch user details
 	QueryUserDetails = `
 query UserDetails($login: String!) {
   user(login: $login) {
@@ -100,7 +100,7 @@ query UserDetails($login: String!) {
   }
 }`
 
-	// QueryCommitLanguages コミットごとの言語使用状況を取得するクエリ
+	// QueryCommitLanguages Query to fetch language usage per commit
 	QueryCommitLanguages = `
 query CommitLanguages($login: String!) {
   user(login: $login) {
@@ -148,7 +148,7 @@ query CommitLanguages($login: String!) {
   }
 }`
 
-	// QueryProductiveTime コミット時間帯を取得するクエリ
+	// QueryProductiveTime Query to fetch commit time distribution
 	QueryProductiveTime = `
 query ProductiveTime($login: String!, $userId: ID!, $since: GitTimestamp!, $until: GitTimestamp!) {
   user(login: $login) {
@@ -178,7 +178,7 @@ query ProductiveTime($login: String!, $userId: ID!, $since: GitTimestamp!, $unti
   }
 }`
 
-	// QueryViewer 認証ユーザー情報を取得するクエリ
+	// QueryViewer Query to fetch authenticated user information
 	QueryViewer = `
 query Viewer {
   viewer {
@@ -188,22 +188,22 @@ query Viewer {
 }`
 )
 
-// newGraphQLClient GraphQLクライアントを作成する
+// newGraphQLClient creates a GraphQL client
 func newGraphQLClient(ctx context.Context, token string) (*graphql.Client, error) {
 	if token == "" {
-		return nil, fmt.Errorf("認証トークンが設定されていません")
+		return nil, fmt.Errorf("authentication token is not set")
 	}
 
-	// OAuth2トークンを使用してHTTPクライアントを作成
+	// Create HTTP client with OAuth2 token
 	httpClient := oauth2.NewClient(ctx, oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	))
 
-	// HTTPクライアントにタイムアウトを設定
-	// 読み取りタイムアウト: 60秒
+	// Set timeout for HTTP client
+	// Read timeout: 60 seconds
 	httpClient.Timeout = 60 * time.Second
 
-	// Transportに接続タイムアウトを設定
+	// Set connection timeout for Transport
 	if oauth2Transport, ok := httpClient.Transport.(*oauth2.Transport); ok {
 		if baseTransport, ok := oauth2Transport.Base.(*http.Transport); ok {
 			if baseTransport.DialContext == nil {
@@ -214,17 +214,17 @@ func newGraphQLClient(ctx context.Context, token string) (*graphql.Client, error
 		}
 	}
 
-	// GraphQLクライアントを作成
+	// Create GraphQL client
 	graphqlClient := graphql.NewClient("https://api.github.com/graphql", httpClient)
 
 	return graphqlClient, nil
 }
 
-// FetchViewer GraphQLを使用して認証ユーザー情報を取得する
+// FetchViewer fetches authenticated user information using GraphQL
 func FetchViewer(ctx context.Context, token string) (string, string, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return "", "", fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return "", "", fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	variables := map[string]interface{}{}
@@ -238,24 +238,24 @@ func FetchViewer(ctx context.Context, token string) (string, string, error) {
 
 	err = graphqlClient.Exec(ctx, QueryViewer, &response, variables)
 	if err != nil {
-		return "", "", fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		return "", "", fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
 	return response.Viewer.Login, response.Viewer.ID, nil
 }
 
-// FetchRepositoriesWithGraphQL GraphQLを使用してリポジトリ情報を一括取得する
+// FetchRepositoriesWithGraphQL fetches repository information in bulk using GraphQL
 func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username string, excludeForks bool) ([]*RepositoryGraphQLData, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	var allRepos []*RepositoryGraphQLData
 	var endCursor *string
 
 	for {
-		// GraphQLクエリの変数を準備
+		// Prepare variables for GraphQL query
 		variables := map[string]interface{}{
 			"login": username,
 		}
@@ -263,7 +263,7 @@ func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username st
 			variables["endCursor"] = *endCursor
 		}
 
-		// GraphQLクエリを実行（文字列クエリを使用）
+		// Execute GraphQL query (using string query)
 		var response struct {
 			User struct {
 				Repositories struct {
@@ -276,10 +276,10 @@ func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username st
 			} `json:"user"`
 		}
 
-		// Execを使用してクエリを実行
+		// Execute query using Exec
 		err := graphqlClient.Exec(ctx, QueryReposPerLanguage, &response, variables)
 		if err != nil {
-			return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to execute GraphQL query: %w", err)
 		}
 
 		allRepos = append(allRepos, response.User.Repositories.Nodes...)
@@ -293,7 +293,7 @@ func FetchRepositoriesWithGraphQL(ctx context.Context, token string, username st
 	return allRepos, nil
 }
 
-// RepositoryGraphQLData GraphQLから取得したリポジトリデータ
+// RepositoryGraphQLData Repository data fetched from GraphQL
 type RepositoryGraphQLData struct {
 	Name            string    `json:"name"`
 	Owner           OwnerData `json:"owner"`
@@ -323,16 +323,16 @@ type RepositoryGraphQLData struct {
 	} `json:"defaultBranchRef"`
 }
 
-// OwnerData オーナー情報
+// OwnerData Owner information
 type OwnerData struct {
 	Login string `json:"login"`
 }
 
-// FetchUserDetailsWithGraphQL GraphQLを使用してユーザー詳細情報を取得する
+// FetchUserDetailsWithGraphQL fetches user details using GraphQL
 func FetchUserDetailsWithGraphQL(ctx context.Context, token string, username string) (*UserDetailsGraphQLData, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	variables := map[string]interface{}{
@@ -345,13 +345,13 @@ func FetchUserDetailsWithGraphQL(ctx context.Context, token string, username str
 
 	err = graphqlClient.Exec(ctx, QueryUserDetails, &response, variables)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
 	return &response.User, nil
 }
 
-// UserDetailsGraphQLData GraphQLから取得したユーザー詳細データ
+// UserDetailsGraphQLData User details data fetched from GraphQL
 type UserDetailsGraphQLData struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
@@ -388,12 +388,12 @@ type UserDetailsGraphQLData struct {
 	} `json:"issues"`
 }
 
-// FetchCommitLanguagesWithGraphQL GraphQLを使用してコミットごとの言語使用状況を取得する
-// リポジトリの複数言語情報を使用して、より多くの言語を取得する
+// FetchCommitLanguagesWithGraphQL fetches language usage per commit using GraphQL
+// Uses multiple language information per repository to fetch more languages
 func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username string) (map[string]map[string]int, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	variables := map[string]interface{}{
@@ -444,32 +444,32 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 
 	err = graphqlClient.Exec(ctx, QueryCommitLanguages, &response, variables)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
-	// データを変換（リポジトリの複数言語情報を使用）
+	// Convert data (using multiple language information per repository)
 	commitLanguages := make(map[string]map[string]int)
 
 	for _, repoContrib := range response.User.ContributionsCollection.CommitContributionsByRepository {
-		// リポジトリで使用されている言語リストを取得
+		// Get list of languages used in the repository
 		repoLanguages := make(map[string]int)
 
-		// languagesエッジから言語とサイズを取得（サイズが大きい順にソート済み）
+		// Get languages and sizes from languages edges (sorted by size descending)
 		for _, langEdge := range repoContrib.Repository.Languages.Edges {
 			if langEdge.Node.Name != "" {
-				// サイズを重みとして使用（大きなファイルほど重要）
+				// Use size as weight (larger files are more important)
 				repoLanguages[langEdge.Node.Name] = langEdge.Size
 			}
 		}
 
-		// プライマリ言語も追加（languagesに含まれていない場合）
+		// Also add primary language (if not already in languages)
 		if repoContrib.Repository.PrimaryLanguage.Name != "" {
 			if _, exists := repoLanguages[repoContrib.Repository.PrimaryLanguage.Name]; !exists {
 				repoLanguages[repoContrib.Repository.PrimaryLanguage.Name] = 1
 			}
 		}
 
-		// 各コミットにリポジトリの言語を適用
+		// Apply repository languages to each commit
 		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {
 			commitKey := edge.Node.CommittedDate
 			if commitKey == "" {
@@ -480,12 +480,12 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 				commitLanguages[commitKey] = make(map[string]int)
 			}
 
-			// リポジトリの各言語をコミットに追加（サイズに比例した重み）
+			// Add each repository language to commit (weighted by size)
 			for lang, size := range repoLanguages {
-				// サイズの平方根を使用して重み付け（大きな差を緩和）
+				// Use square root of size for weighting (to mitigate large differences)
 				weight := 1
 				if size > 1000 {
-					// 大きなファイルの場合は重みを増やす（ただし上限あり）
+					// Increase weight for large files (with upper limit)
 					weight = 2
 				}
 				commitLanguages[commitKey][lang] += weight
@@ -496,11 +496,11 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 	return commitLanguages, nil
 }
 
-// FetchProductiveTimeWithGraphQL GraphQLを使用してコミット時間帯を取得する
+// FetchProductiveTimeWithGraphQL fetches commit time distribution using GraphQL
 func FetchProductiveTimeWithGraphQL(ctx context.Context, token string, username, userID string, since, until time.Time) (map[int]int, error) {
 	graphqlClient, err := newGraphQLClient(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクライアントの作成に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
 	variables := map[string]interface{}{
@@ -536,10 +536,10 @@ func FetchProductiveTimeWithGraphQL(ctx context.Context, token string, username,
 
 	err = graphqlClient.Exec(ctx, QueryProductiveTime, &response, variables)
 	if err != nil {
-		return nil, fmt.Errorf("GraphQLクエリの実行に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to execute GraphQL query: %w", err)
 	}
 
-	// 時間帯ごとのコミット数を集計
+	// Aggregate commit count by time slot
 	timeDistribution := make(map[int]int)
 	for _, repoContrib := range response.User.ContributionsCollection.CommitContributionsByRepository {
 		for _, edge := range repoContrib.Repository.DefaultBranchRef.Target.History.Edges {

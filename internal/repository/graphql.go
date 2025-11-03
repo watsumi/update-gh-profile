@@ -453,7 +453,7 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 	for _, repoContrib := range response.User.ContributionsCollection.CommitContributionsByRepository {
 		// リポジトリで使用されている言語リストを取得
 		repoLanguages := make(map[string]int)
-		
+
 		// languagesエッジから言語とサイズを取得（サイズが大きい順にソート済み）
 		for _, langEdge := range repoContrib.Repository.Languages.Edges {
 			if langEdge.Node.Name != "" {
@@ -461,7 +461,7 @@ func FetchCommitLanguagesWithGraphQL(ctx context.Context, token string, username
 				repoLanguages[langEdge.Node.Name] = langEdge.Size
 			}
 		}
-		
+
 		// プライマリ言語も追加（languagesに含まれていない場合）
 		if repoContrib.Repository.PrimaryLanguage.Name != "" {
 			if _, exists := repoLanguages[repoContrib.Repository.PrimaryLanguage.Name]; !exists {

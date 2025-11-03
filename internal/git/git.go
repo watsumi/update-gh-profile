@@ -207,7 +207,7 @@ func Commit(repoPath, message string, files []string) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		stderrStr := stderr.String()
 		// コミットする変更がない場合はエラーとしない（既にコミット済みの場合）

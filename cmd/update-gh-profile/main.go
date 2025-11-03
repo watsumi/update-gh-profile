@@ -15,7 +15,6 @@ import (
 func main() {
 	// コマンドライン引数のパース
 	var (
-		usernameFlag    = flag.String("username", "", "[非推奨・無視されます] このツールは認証ユーザー自身のリポジトリのみを取得します")
 		excludeForksStr = flag.String("exclude-forks", "true", "フォークリポジトリを除外するか（true/false）")
 	)
 	flag.Parse()
@@ -40,13 +39,7 @@ func main() {
 	// コンテキストの作成
 	ctx := context.Background()
 
-	// 認証ユーザーの検証はGraphQLで行うため、ここではスキップ
-	// 対象ユーザー名の決定（優先順位: コマンドライン引数 > 環境変数 > 認証ユーザー）
-	targetUser := *usernameFlag
-	if targetUser == "" {
-		targetUser = cfg.GetTargetUser()
-		// 空の場合は認証ユーザーを使用（GraphQLで取得）
-	}
+	// 認証ユーザーはGraphQLで自動的に取得されます
 
 	// フォーク除外の設定
 	excludeForks, err := strconv.ParseBool(*excludeForksStr)
@@ -77,7 +70,7 @@ func main() {
 
 	// ワークフローを実行
 	fmt.Println("\n🚀 メインワークフローを開始します...")
-	err = workflow.Run(ctx, cfg.GitHubTokenRead, cfg.GitHubTokenWrite, workflowConfig)
+	err = workflow.Run(ctx, cfg.GitHubToken, workflowConfig)
 	if err != nil {
 		fmt.Printf("エラー: ワークフローの実行に失敗しました: %v\n", err)
 		os.Exit(1)

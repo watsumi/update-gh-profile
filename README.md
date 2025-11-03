@@ -39,6 +39,7 @@ go build -o update-gh-profile cmd/update-gh-profile/main.go
 このリポジトリを別のリポジトリの GitHub Actions ワークフローで使用できます。
 
 詳細は以下を参照してください：
+
 - [README_ACTION.md](README_ACTION.md) - 基本的な使用手順
 - [USAGE_ACTION.md](USAGE_ACTION.md) - 詳細な使用例
 - [PRIVATE_REPO_SETUP.md](PRIVATE_REPO_SETUP.md) - プライベートリポジトリでの設定手順
@@ -47,12 +48,51 @@ go build -o update-gh-profile cmd/update-gh-profile/main.go
 
 ```yaml
 - uses: watsumi/update-gh-profile@main
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
-    username: ${{ github.repository_owner }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}
     exclude_forks: "true"
 ```
+
+#### Workflow の設定例
+
+プロフィールリポジトリ（`username/username` 形式のリポジトリ）で使用する場合の完全な workflow ファイル例：
+
+```yaml
+name: Update GitHub Profile
+
+on:
+  schedule:
+    # 毎日 00:00 UTC（日本時間 09:00）に実行
+    - cron: "0 0 * * *"
+  workflow_dispatch: # 手動実行も可能
+
+permissions:
+  contents: write # README.md を更新するために必要
+
+jobs:
+  update-profile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update GitHub Profile
+        uses: watsumi/update-gh-profile@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          exclude_forks: "true"
+        # 注意: このアクションは内部で自動的にコミットとプッシュを実行します
+        # permissions: contents: write により認証情報が自動的に設定されるため、
+        # github_token_write は不要です
+```
+
+**注意事項:**
+
+- **`permissions: contents: write` について**: この権限設定により `secrets.GITHUB_TOKEN` に書き込み権限が付与され、`actions/checkout@v4` でチェックアウトされたリポジトリに対して `git push` が自動的に認証されます。そのため、`github_token_write` パラメーターは不要です（削除されました）。
+- **自動コミット・プッシュ**: このアクションは README.md を更新した後、自動的にコミットとプッシュを実行します。追加のステップは不要です。
+- **トークンの設定**: `github_token` には `secrets.GITHUB_TOKEN` を渡してください。プライベートリポジトリを読み取る場合は、より広範囲な権限を持つ Personal Access Token を `github_token` に設定してください。
+- **認証ユーザーの自動取得**: このツールは認証ユーザー自身のリポジトリのみを取得します。認証ユーザーは自動的に取得されるため、ユーザー名の指定は不要です。
+- **フォークの除外**: `exclude_forks: "true"` を設定すると、フォークされたリポジトリは統計から除外されます。
 
 ## プロジェクト構成
 
